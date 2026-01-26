@@ -8,8 +8,11 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.db import get_engine
+from app.modules.auth import router as auth_router
+from app.modules.auth.service import init_auth_storage
 
 app = FastAPI(title="Core Platform Bootstrap")
+app.include_router(auth_router)
 
 
 def _init_db() -> None:
@@ -30,6 +33,7 @@ def on_startup() -> None:
     """
 
     _init_db()
+    init_auth_storage()
 
 
 @app.get("/health")
