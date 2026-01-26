@@ -6,8 +6,8 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from backend.app.core.config import settings
-from backend.app.core.db import get_engine
+from app.core.config import settings
+from app.core.db import get_engine
 
 app = FastAPI(title="Core Platform Bootstrap")
 
