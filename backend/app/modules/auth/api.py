@@ -4,21 +4,15 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from app.core.context import UserContext
+from app.core.security import get_current_user
 from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserPublic
-from app.modules.auth.security import create_access_token, decode_access_token
-from app.modules.auth.service import (
-    authenticate_user,
-    create_user,
-    get_db,
-    get_user_by_id,
-    get_user_by_username,
-)
+from app.modules.auth.security import create_access_token
+from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-security = HTTPBearer()
 
 
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
@@ -54,30 +48,10 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
 
 @router.get("/me", response_model=UserPublic)
 def me(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db),
+    current_user: UserContext = Depends(get_current_user),
 ) -> UserPublic:
     """Текущий пользователь.
     Минимально читает токен и возвращает технические поля пользователя.
     """
 
-    try:
-        payload = decode_access_token(credentials.credentials)
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-    user = get_user_by_id(db, int(user_id))
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-    return UserPublic(id=user.id, username=user.username)
+    return UserPublic(id=current_user.id, username=current_user.username)
