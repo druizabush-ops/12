@@ -11,7 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import get_engine
-from app.modules.auth.models import Base, User
+from app.db.base import Base
+from app.modules.auth.models import User
 from app.modules.auth.security import hash_password, verify_password
 
 engine = get_engine()

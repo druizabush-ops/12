@@ -4,13 +4,9 @@
 """
 
 from sqlalchemy import Integer, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    """Базовый класс для ORM.
-    Нужен исключительно для таблицы пользователей.
-    """
+from app.db.base import Base
 
 
 class User(Base):
