@@ -3,6 +3,8 @@
 Минимальность сохраняет только один маршрут и подключение к БД без бизнес-логики.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -15,6 +17,7 @@ from app.modules.registry import include_module_routers
 
 app = FastAPI(title="Core Platform Bootstrap")
 include_module_routers(app)
+logger = logging.getLogger("startup")
 
 
 def _init_db() -> None:
@@ -34,11 +37,38 @@ def on_startup() -> None:
     Нужна для демонстрации запуска, без дополнительной логики.
     """
 
+    # Логирование ограничено только фазой старта, чтобы не шуметь в runtime.
+    # Формат сообщений един для быстрой диагностики и поиска причины остановки.
+    logger.info("STARTUP | начало запуска backend")
+
     # Проверка конфигурации выполняется при старте, чтобы остановить запуск при отсутствии env.
     # Fail-fast предотвращает скрытые ошибки в runtime и упрощает диагностику.
-    validate_required_envs()
-    _init_db()
-    init_auth_storage()
+    try:
+        validate_required_envs()
+    except Exception as exc:
+        logger.error("STARTUP | проверка конфигурации не пройдена: %s", exc)
+        raise
+    logger.info("STARTUP | проверка конфигурации успешна")
+
+    # Проверка БД логируется, потому что это ключевая зависимость для старта сервиса.
+    try:
+        _init_db()
+    except Exception as exc:
+        logger.error("STARTUP | проверка БД не пройдена: %s", exc)
+        raise
+    logger.info("STARTUP | проверка БД успешна")
+
+    # Инициализация auth-хранилища логируется как финальный шаг старта.
+    try:
+        init_auth_storage()
+    except Exception as exc:
+        logger.error(
+            "STARTUP | инициализация auth-хранилища не пройдена: %s",
+            exc,
+        )
+        raise
+
+    logger.info("STARTUP | запуск backend завершён успешно")
 
 
 @app.get("/health")
