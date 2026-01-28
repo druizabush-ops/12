@@ -21,3 +21,12 @@
 ```bash
 alembic upgrade head
 ```
+
+## Диагностические endpoints
+
+- `GET /health` — liveness-проверка процесса без обращения к БД. Возвращает `200` и JSON
+  `{"status":"ok","environment":"..."}`.
+- `GET /ready` — readiness-проверка готовности зависимостей. Делает лёгкий запрос `SELECT 1`
+  и возвращает:
+  - `200` и JSON `{"status":"ready"}` при доступной БД.
+  - `503` и JSON `{"status":"not_ready","reason":"..."}` при недоступной БД.
