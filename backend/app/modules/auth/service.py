@@ -14,6 +14,7 @@ from app.core.db import get_engine
 from app.modules.auth.models import User
 from app.modules.auth.security import hash_password, verify_password
 
+# Импорт Base удалён, потому что схемой управляют миграции, а лишний импорт вводит в заблуждение.
 engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
