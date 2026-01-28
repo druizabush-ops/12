@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import get_engine
-from app.modules.auth.models import Base, User
+from app.modules.auth.models import User
 from app.modules.auth.security import hash_password, verify_password
 
 engine = get_engine()
@@ -19,11 +19,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 def init_auth_storage() -> None:
-    """Создаёт таблицу пользователей при старте.
-    Минимально и без миграций, только базовый create_all.
+    """Оставлен для совместимости старта приложения.
+    Схема БД теперь управляется только миграциями Alembic, поэтому здесь ничего не создаётся.
     """
 
-    Base.metadata.create_all(bind=engine)
+    # Схема фиксируется миграциями, а runtime не должен создавать таблицы.
+    return None
 
 
 def get_db() -> Generator[Session, None, None]:
