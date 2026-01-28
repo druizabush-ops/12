@@ -6,7 +6,7 @@
 from fastapi import FastAPI
 from sqlalchemy import text
 
-from app.core.config import settings
+from app.core.config import settings, validate_required_envs
 from app.core.db import get_engine
 from app.modules.auth.service import init_auth_storage
 from app.modules.registry import include_module_routers
@@ -32,6 +32,9 @@ def on_startup() -> None:
     Нужна для демонстрации запуска, без дополнительной логики.
     """
 
+    # Проверка конфигурации выполняется при старте, чтобы остановить запуск при отсутствии env.
+    # Fail-fast предотвращает скрытые ошибки в runtime и упрощает диагностику.
+    validate_required_envs()
     _init_db()
     init_auth_storage()
 
