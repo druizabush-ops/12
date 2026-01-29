@@ -1,19 +1,22 @@
-// Минимальная точка входа React-приложения.
-// Файл существует для проверки запуска и отображения базового текста.
-// Минимальность — только отрисовка простого компонента.
+// Файл является единственной точкой входа приложения и подключает провайдеры.
+// Он отделяет bootstrap-логику от UI, чтобы маршруты и разметка жили в App.
 
 import React from "react";
 import ReactDOM from "react-dom/client";
-
-const App = () => (
-  <div style={{ fontFamily: "sans-serif", padding: "2rem" }}>
-    <h1>Core Platform</h1>
-    <p>Минимальный фронтенд Block 0 запущен.</p>
-  </div>
-);
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import "./styles/base.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   </React.StrictMode>
 );

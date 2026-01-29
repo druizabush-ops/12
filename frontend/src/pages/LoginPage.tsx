@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-
 import { login } from "../api/auth";
 
 const LoginPage = () => {
@@ -26,7 +25,12 @@ const LoginPage = () => {
   return (
     <main style={{ maxWidth: 320, margin: "0 auto", padding: "2rem" }}>
       <h1>Вход</h1>
-      {/* Архитектура BLOCK 11 не меняется: этот экран остаётся в существующем routing и shell. */}
+
+      {/* 
+        Архитектура BLOCK 11 не меняется.
+        Экран логина остаётся в существующем routing и shell,
+        редиректы и защита выполняются через RequireAuth и SmartRedirect.
+      */}
       <form onSubmit={handleSubmit}>
         <label>
           Логин
@@ -38,6 +42,7 @@ const LoginPage = () => {
             required
           />
         </label>
+
         <label>
           Пароль
           <input
@@ -48,10 +53,12 @@ const LoginPage = () => {
             required
           />
         </label>
+
         <button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Вход..." : "Войти"}
         </button>
       </form>
+
       {error && <p style={{ color: "crimson" }}>{error}</p>}
     </main>
   );
