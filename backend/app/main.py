@@ -6,6 +6,7 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,6 +17,15 @@ from app.modules.auth.service import init_auth_storage
 from app.modules.registry import include_module_routers
 
 app = FastAPI(title="Core Platform Bootstrap")
+# CORS включён для браузерного preflight при логине, чтобы UI мог обращаться к backend без 403.
+# Это инфраструктурная настройка и не меняет архитектуру BLOCK 11, маршрутизацию или бизнес-логику.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 include_module_routers(app)
 logger = logging.getLogger("startup")
 

@@ -24,6 +24,20 @@ python -m alembic -c alembic.ini upgrade head
 
 Без выполненных миграций backend не запускается, потому что работает в режиме fail-fast.
 
+## Локальный запуск (Windows PowerShell)
+
+Перед запуском необходимо явно задать обязательные переменные окружения.  
+Если переменные окружения не заданы — backend намеренно не стартует (fail-fast).  
+Это корректное поведение core-платформы.
+
+```powershell
+$env:DATABASE_URL="postgresql+psycopg2://postgres:postgres@localhost:5432/newdom"
+$env:AUTH_SECRET_KEY="local-dev-secret-key-change-me"
+
+python -m alembic -c alembic.ini upgrade head
+uvicorn app.main:app --reload
+```
+
 ## Диагностические endpoints
 
 - `GET /health` — liveness-проверка процесса без обращения к БД. Возвращает `200` и JSON

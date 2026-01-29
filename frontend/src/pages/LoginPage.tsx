@@ -3,14 +3,9 @@
 
 import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiFetch } from "../api/client";
+import { requestLogin } from "../api/auth";
 import { useAuth } from "../contexts/AuthContext";
 import { APP_NAME } from "../config/appConfig";
-
-type LoginResponse = {
-  access_token: string;
-  token_type: string;
-};
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -26,10 +21,7 @@ const LoginPage = () => {
     setIsSubmitting(true);
 
     try {
-      const data = await apiFetch<LoginResponse>("/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ username, password }),
-      });
+      const data = await requestLogin(username, password);
 
       await login(data.access_token);
       navigate("/app", { replace: true });
