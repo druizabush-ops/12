@@ -1,19 +1,21 @@
-// Минимальная точка входа React-приложения.
-// Файл существует для проверки запуска и отображения базового текста.
-// Минимальность — только отрисовка простого компонента.
-
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 
-const App = () => (
-  <div style={{ fontFamily: "sans-serif", padding: "2rem" }}>
-    <h1>Core Platform</h1>
-    <p>Минимальный фронтенд Block 0 запущен.</p>
-  </div>
-);
+import { App } from "./App";
+import { AuthProvider } from "./contexts/AuthContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
+import "./styles.css";
 
+// Основная точка входа приложения: провайдеры, роутер и корневой компонент.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );
