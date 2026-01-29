@@ -6,6 +6,7 @@
 import logging
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,6 +17,15 @@ from app.modules.auth.service import init_auth_storage
 from app.modules.registry import include_module_routers
 
 app = FastAPI(title="Core Platform Bootstrap")
+# Добавляем CORS для frontend, потому что логин идёт из браузера и нужен доступ из http://localhost:5173.
+# Архитектура BLOCK 11 не меняется: это инфраструктурный middleware без влияния на маршрутизацию и shell.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
 include_module_routers(app)
 logger = logging.getLogger("startup")
 
