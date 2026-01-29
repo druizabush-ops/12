@@ -7,7 +7,7 @@ import logging
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings, validate_required_envs
@@ -29,6 +29,15 @@ def _init_db() -> None:
     engine = get_engine()
     with engine.connect() as connection:
         connection.execute(text("SELECT 1"))
+
+    # Проверка обязательной схемы нужна для fail-fast, если миграции не применены.
+    # Runtime не создаёт таблицы, потому что схема управляется только Alembic.
+    inspector = inspect(engine)
+    if not inspector.has_table("auth_users"):
+        raise RuntimeError(
+            "Таблица auth_users не найдена. "
+            "Перед запуском backend необходимо выполнить alembic upgrade head."
+        )
 
 
 @app.on_event("startup")
