@@ -1,0 +1,7 @@
+// Централизованная конфигурация API для всего фронтенда.
+// Значение по умолчанию держим здесь, чтобы не дублировать по проекту.
+
+export const DEFAULT_API_BASE_URL = "http://localhost:8000";
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL;
