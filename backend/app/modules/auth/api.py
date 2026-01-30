@@ -36,6 +36,8 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
     Возвращает access token для дальнейших запросов.
     """
 
+    # OAuth2PasswordRequestForm не используется, потому что логин оформлен как обычный JSON endpoint.
+    # Принимаем Pydantic-схему, чтобы сохранить архитектуру BLOCK 11 без изменений роутера.
     user = authenticate_user(db, payload.username, payload.password)
     if not user:
         raise HTTPException(
