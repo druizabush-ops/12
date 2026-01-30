@@ -17,35 +17,62 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="brand">
+        <div className="brand" data-tooltip="Новый Дом">
           <span className="brand-logo">🏢</span>
-          {!isCollapsed && <span className="brand-name">{APP_NAME}</span>}
+          <span className="brand-name sidebar-text">{APP_NAME}</span>
         </div>
-        <button className="ghost-button" type="button" onClick={onToggle}>
-          {isCollapsed ? "→" : "←"}
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={onToggle}
+          data-tooltip={isCollapsed ? "Развернуть" : "Свернуть"}
+        >
+          <span className="sidebar-icon">{isCollapsed ? "→" : "←"}</span>
+          <span className="sidebar-text">{isCollapsed ? "Развернуть" : "Свернуть"}</span>
         </button>
       </div>
       <div className="sidebar-section">
-        <div className="user-card">
-          <span className="user-label">Пользователь</span>
-          <strong>{user ? user.username : "Загрузка..."}</strong>
+        <div className="user-card" data-tooltip="Пользователь">
+          <span className="sidebar-icon" aria-hidden="true">
+            👤
+          </span>
+          <span className="user-label sidebar-text">Пользователь</span>
+          <strong className="sidebar-text">{user ? user.username : "Загрузка..."}</strong>
         </div>
       </div>
       <div className="sidebar-section">
-        <button className="secondary-button" type="button" onClick={toggleTheme}>
-          {theme === "light" ? "Темная тема" : "Светлая тема"}
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={toggleTheme}
+          data-tooltip={theme === "light" ? "Темная тема" : "Светлая тема"}
+        >
+          <span className="sidebar-icon" aria-hidden="true">
+            🌓
+          </span>
+          <span className="sidebar-text">
+            {theme === "light" ? "Темная тема" : "Светлая тема"}
+          </span>
         </button>
       </div>
       <div className="sidebar-section">
-        <div className="support-card">
-          <span className="support-label">Телефон руководителя</span>
-          <strong>{MANAGER_PHONE}</strong>
+        <div className="support-card" data-tooltip="Телефон руководителя">
+          <span className="sidebar-icon" aria-hidden="true">
+            📞
+          </span>
+          <span className="support-label sidebar-text">Телефон руководителя</span>
+          <strong className="sidebar-text">{MANAGER_PHONE}</strong>
         </div>
       </div>
       <div className="sidebar-section">
-        <div className="modules">
-          <span className="modules-title">Модули</span>
-          <ul>
+        <div className="modules" data-tooltip="Модули">
+          <div className="modules-header">
+            <span className="sidebar-icon" aria-hidden="true">
+              🧩
+            </span>
+            <span className="modules-title sidebar-text">Модули</span>
+          </div>
+          <ul className="sidebar-text">
             <li>Модуль 1 (ожидается)</li>
             <li>Модуль 2 (ожидается)</li>
             <li>Модуль 3 (ожидается)</li>
@@ -53,8 +80,11 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
         </div>
       </div>
       <div className="sidebar-footer">
-        <button className="primary-button" type="button" onClick={logout}>
-          Выйти
+        <button className="primary-button" type="button" onClick={logout} data-tooltip="Выйти">
+          <span className="sidebar-icon" aria-hidden="true">
+            🚪
+          </span>
+          <span className="sidebar-text">Выйти</span>
         </button>
       </div>
     </aside>
