@@ -59,7 +59,7 @@ body {
 }
 
 .app-shell.collapsed .sidebar {
-  width: 90px;
+  width: 88px;
 }
 
 .app-content {
@@ -82,6 +82,14 @@ body {
 
 .brand-logo {
   font-size: 24px;
+}
+
+.sidebar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .user-card,
@@ -111,6 +119,12 @@ body {
   gap: 8px;
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.modules-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .sidebar-section {
@@ -151,6 +165,68 @@ body {
   border: 1px solid var(--border);
   color: var(--text-primary);
   padding: 6px 10px;
+}
+
+.sidebar .primary-button,
+.sidebar .secondary-button,
+.sidebar .ghost-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-shell.collapsed .sidebar .sidebar-text {
+  display: none;
+}
+
+.app-shell.collapsed .sidebar .sidebar-section,
+.app-shell.collapsed .sidebar .sidebar-footer {
+  align-items: center;
+}
+
+.app-shell.collapsed .sidebar .user-card,
+.app-shell.collapsed .sidebar .support-card,
+.app-shell.collapsed .sidebar .modules {
+  align-items: center;
+  text-align: center;
+}
+
+.app-shell.collapsed .sidebar .primary-button,
+.app-shell.collapsed .sidebar .secondary-button,
+.app-shell.collapsed .sidebar .ghost-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.app-shell.collapsed .sidebar [data-tooltip] {
+  position: relative;
+}
+
+.app-shell.collapsed .sidebar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translate(-4px, -50%);
+  background: var(--text-primary);
+  color: var(--bg-secondary);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  box-shadow: var(--shadow);
+  z-index: 10;
+}
+
+.app-shell.collapsed .sidebar [data-tooltip]:hover::after,
+.app-shell.collapsed .sidebar [data-tooltip]:focus-within::after {
+  opacity: 1;
+  transform: translate(0, -50%);
 }
 
 .primary-button:disabled {
