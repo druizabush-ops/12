@@ -49,17 +49,20 @@ body {
 
 .sidebar {
   width: 280px;
+  flex: 0 0 280px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  transition: width 0.2s ease;
+  transition: width 0.2s ease, padding 0.2s ease;
 }
 
 .app-shell.collapsed .sidebar {
-  width: 90px;
+  width: 88px;
+  flex-basis: 88px;
+  padding: 20px 16px;
 }
 
 .app-content {
@@ -71,6 +74,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .brand {
@@ -84,6 +88,91 @@ body {
   font-size: 24px;
 }
 
+.brand-name {
+  white-space: nowrap;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-nav-link {
+  text-decoration: none;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.sidebar-nav-link:hover {
+  background: var(--bg);
+}
+
+.sidebar-nav-link.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.3);
+  color: var(--accent);
+}
+
+.sidebar-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sidebar-button {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.sidebar.is-collapsed .sidebar-text {
+  display: none;
+}
+
+.sidebar.is-collapsed .sidebar-item,
+.sidebar.is-collapsed .sidebar-nav-link,
+.sidebar.is-collapsed .sidebar-button {
+  justify-content: center;
+}
+
+.sidebar.is-collapsed .sidebar-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--text-primary);
+  color: var(--bg-secondary);
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  transition: opacity 0.15s ease;
+  z-index: 10;
+}
+
+.sidebar.is-collapsed .sidebar-item:hover::after,
+.sidebar.is-collapsed .sidebar-item:focus-within::after {
+  opacity: 1;
+}
+
 .user-card,
 .support-card {
   display: flex;
@@ -92,6 +181,25 @@ body {
   background: var(--bg);
   padding: 12px 16px;
   border-radius: 12px;
+}
+
+.user-card.sidebar-item,
+.support-card.sidebar-item {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.modules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modules-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .user-label,
@@ -106,7 +214,7 @@ body {
 .modules ul {
   list-style: none;
   padding: 0;
-  margin: 10px 0 0;
+  margin: 0;
   display: grid;
   gap: 8px;
   font-size: 14px;
@@ -132,6 +240,9 @@ body {
   border-radius: 10px;
   padding: 10px 16px;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .primary-button {
@@ -198,23 +309,17 @@ body {
   width: min(420px, 100%);
   background: var(--bg-secondary);
   padding: 32px;
-  border-radius: 20px;
+  border-radius: 16px;
   box-shadow: var(--shadow);
-  display: grid;
-  gap: 24px;
 }
 
-.login-header {
-  display: grid;
-  gap: 8px;
+.login-card h1 {
+  margin: 0 0 8px;
 }
 
-.login-header h1 {
-  margin: 0;
-}
-
-.login-logo {
-  font-size: 32px;
+.login-card p {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
 }
 
 .login-form {
@@ -222,46 +327,26 @@ body {
   gap: 16px;
 }
 
-.form-field {
+.login-form label {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
-  color: var(--text-secondary);
 }
 
-.form-field input {
-  padding: 10px 12px;
+.login-form input {
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-primary);
+}
+
+.form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
 }
 
 .form-error {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(220, 38, 38, 0.12);
   color: var(--danger);
-  font-size: 14px;
-}
-
-.loading-page {
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  font-size: 13px;
 }
