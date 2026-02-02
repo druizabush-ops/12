@@ -12,6 +12,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.db.base import Base
 from app.modules.auth import models as auth_models  # noqa: F401
+from app.modules.module_registry import models as module_registry_models  # noqa: F401
 
 config = context.config
 

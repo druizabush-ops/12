@@ -1,9 +1,11 @@
 // Файл отвечает за боковую панель, чтобы навигация и профиль были всегда под рукой.
 // Компонент изолирует логику сайдбара от остального layout.
 
+import { useNavigate } from "react-router-dom";
+import { APP_NAME, MANAGER_PHONE } from "../config/appConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { APP_NAME, MANAGER_PHONE } from "../config/appConfig";
+import { useModules } from "../hooks/useModules";
 
 type SidebarProps = {
   isCollapsed: boolean;
@@ -13,6 +15,29 @@ type SidebarProps = {
 const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const { modules, isLoading, error, pendingActionId, reload, setPrimary, reorder } = useModules();
+
+  const isPending = pendingActionId !== null;
+
+  const handleMove = (moduleId: string, direction: "up" | "down") => {
+    const currentIndex = modules.findIndex((moduleItem) => moduleItem.id === moduleId);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= modules.length) {
+      return;
+    }
+
+    const nextOrder = [...modules];
+    [nextOrder[currentIndex], nextOrder[targetIndex]] = [
+      nextOrder[targetIndex],
+      nextOrder[currentIndex],
+    ];
+    void reorder(nextOrder.map((moduleItem) => moduleItem.id));
+  };
 
   return (
     <aside className="sidebar">
@@ -72,11 +97,75 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
             </span>
             <span className="modules-title sidebar-text">Модули</span>
           </div>
-          <ul className="sidebar-text">
-            <li>Модуль 1 (ожидается)</li>
-            <li>Модуль 2 (ожидается)</li>
-            <li>Модуль 3 (ожидается)</li>
-          </ul>
+          {isLoading ? (
+            <p className="sidebar-text">Загрузка модулей...</p>
+          ) : error ? (
+            <div className="sidebar-text">
+              <p>{error}</p>
+              <button className="ghost-button" type="button" onClick={reload}>
+                Повторить
+              </button>
+            </div>
+          ) : modules.length === 0 ? (
+            <p className="sidebar-text">Нет доступных модулей</p>
+          ) : (
+            <ul className="sidebar-text">
+              {modules.map((moduleItem, index) => (
+                <li key={moduleItem.id}>
+                  <div>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => navigate(`/app/${moduleItem.path}`)}
+                      data-tooltip={`Перейти: ${moduleItem.title}`}
+                    >
+                      <span className="sidebar-text">{moduleItem.title}</span>
+                    </button>
+                    {moduleItem.is_primary ? (
+                      <span className="sidebar-text"> (основной)</span>
+                    ) : null}
+                  </div>
+                  <div>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => setPrimary(moduleItem.is_primary ? null : moduleItem.id)}
+                      disabled={isPending}
+                      data-tooltip={
+                        moduleItem.is_primary ? "Снять основной модуль" : "Сделать основным"
+                      }
+                    >
+                      <span className="sidebar-icon" aria-hidden="true">
+                        ⭐
+                      </span>
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => handleMove(moduleItem.id, "up")}
+                      disabled={isPending || index === 0}
+                      data-tooltip="Поднять выше"
+                    >
+                      <span className="sidebar-icon" aria-hidden="true">
+                        ↑
+                      </span>
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => handleMove(moduleItem.id, "down")}
+                      disabled={isPending || index === modules.length - 1}
+                      data-tooltip="Опустить ниже"
+                    >
+                      <span className="sidebar-icon" aria-hidden="true">
+                        ↓
+                      </span>
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       <div className="sidebar-footer">
