@@ -11,12 +11,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import get_engine
-from app.modules.auth.models import User
+from app.modules.auth.models import Role, User, UserRole
 from app.modules.auth.security import hash_password, verify_password
 
 # Импорт Base удалён, потому что схемой управляют миграции, а лишний импорт вводит в заблуждение.
 engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+DEFAULT_ROLE_NAME = "employee"
 
 
 def init_auth_storage() -> None:
@@ -57,6 +58,7 @@ def create_user(db: Session, username: str, password: str) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
+    assign_default_role(db, user.id)
     return user
 
 
@@ -79,3 +81,13 @@ def get_user_by_id(db: Session, user_id: int) -> User | None:
     """
 
     return db.get(User, user_id)
+
+
+def assign_default_role(db: Session, user_id: int) -> None:
+    """Назначает роль по умолчанию новому пользователю."""
+
+    role_id = db.scalar(select(Role.id).where(Role.name == DEFAULT_ROLE_NAME))
+    if role_id is None:
+        return None
+    db.add(UserRole(user_id=user_id, role_id=role_id))
+    db.commit()

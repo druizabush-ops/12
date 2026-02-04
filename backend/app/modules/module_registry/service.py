@@ -6,6 +6,7 @@ Backend остаётся источником истины о состоянии
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.modules.auth.models import RoleModule, UserRole
 from app.modules.module_registry.models import PlatformModule
 
 
@@ -15,6 +16,43 @@ def list_modules(db: Session) -> list[PlatformModule]:
     """
 
     return list(db.scalars(select(PlatformModule).order_by(PlatformModule.order)))
+
+
+def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
+    """Возвращает модули с флагом доступа по ролям пользователя."""
+
+    modules = list_modules(db)
+    role_ids = list(db.scalars(select(UserRole.role_id).where(UserRole.user_id == user_id)))
+    if not role_ids:
+        return [
+            {
+                "id": module.id,
+                "name": module.name,
+                "title": module.title,
+                "path": module.path,
+                "order": module.order,
+                "is_primary": module.is_primary,
+                "has_access": False,
+            }
+            for module in modules
+        ]
+
+    accessible_ids = set(
+        db.scalars(select(RoleModule.module_id).where(RoleModule.role_id.in_(role_ids))).all()
+    )
+
+    return [
+        {
+            "id": module.id,
+            "name": module.name,
+            "title": module.title,
+            "path": module.path,
+            "order": module.order,
+            "is_primary": module.is_primary,
+            "has_access": module.id in accessible_ids,
+        }
+        for module in modules
+    ]
 
 
 def set_primary_module(db: Session, module_id: str | None) -> list[PlatformModule]:

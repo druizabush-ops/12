@@ -41,6 +41,10 @@ export const ModuleContainer: React.FC<ModuleContainerProps> = ({ moduleId, modu
     return <ModuleFallback state="not_found" />;
   }
 
+  if (!resolvedModule.has_access) {
+    return <ModuleFallback state="no_access" />;
+  }
+
   const ModuleComponent = moduleRegistry[resolvedModule.path];
 
   if (!ModuleComponent) {

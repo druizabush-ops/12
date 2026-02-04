@@ -19,19 +19,25 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { modules, isLoading, error, pendingActionId, reload, setPrimary, reorder } = useModules();
 
   const isPending = pendingActionId !== null;
+  const visibleModules = modules.filter((moduleItem) => moduleItem.has_access);
+  const canReorder = modules.length === visibleModules.length;
 
   const handleMove = (moduleId: string, direction: "up" | "down") => {
-    const currentIndex = modules.findIndex((moduleItem) => moduleItem.id === moduleId);
+    if (!canReorder) {
+      return;
+    }
+
+    const currentIndex = visibleModules.findIndex((moduleItem) => moduleItem.id === moduleId);
     if (currentIndex === -1) {
       return;
     }
 
     const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= modules.length) {
+    if (targetIndex < 0 || targetIndex >= visibleModules.length) {
       return;
     }
 
-    const nextOrder = [...modules];
+    const nextOrder = [...visibleModules];
     [nextOrder[currentIndex], nextOrder[targetIndex]] = [
       nextOrder[targetIndex],
       nextOrder[currentIndex],
@@ -106,17 +112,17 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
                 Повторить
               </button>
             </div>
-          ) : modules.length === 0 ? (
+          ) : visibleModules.length === 0 ? (
             <p className="sidebar-text">Нет доступных модулей</p>
           ) : (
             <ul className="sidebar-text">
-              {modules.map((moduleItem, index) => (
+              {visibleModules.map((moduleItem, index) => (
                 <li key={moduleItem.id}>
                   <div>
                     <button
                       className="ghost-button"
                       type="button"
-                      onClick={() => navigate(`/app/${moduleItem.path}`)}
+                      onClick={() => navigate(`/app/modules/${moduleItem.path}`)}
                       data-tooltip={`Перейти: ${moduleItem.title}`}
                     >
                       <span className="sidebar-text">{moduleItem.title}</span>
@@ -143,7 +149,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
                       className="ghost-button"
                       type="button"
                       onClick={() => handleMove(moduleItem.id, "up")}
-                      disabled={isPending || index === 0}
+                      disabled={isPending || !canReorder || index === 0}
                       data-tooltip="Поднять выше"
                     >
                       <span className="sidebar-icon" aria-hidden="true">
@@ -154,7 +160,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
                       className="ghost-button"
                       type="button"
                       onClick={() => handleMove(moduleItem.id, "down")}
-                      disabled={isPending || index === modules.length - 1}
+                      disabled={isPending || !canReorder || index === visibleModules.length - 1}
                       data-tooltip="Опустить ниже"
                     >
                       <span className="sidebar-icon" aria-hidden="true">

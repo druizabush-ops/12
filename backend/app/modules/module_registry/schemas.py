@@ -18,6 +18,7 @@ class ModuleDto(BaseModel):
     path: str
     order: int
     is_primary: bool
+    has_access: bool
 
 
 class ModulePrimaryUpdate(BaseModel):

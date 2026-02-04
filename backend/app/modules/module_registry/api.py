@@ -5,10 +5,15 @@ BLOCK 13 вводит единый реестр, поэтому UI модуле�
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.context import UserContext
 from app.core.security import get_current_user
 from app.modules.auth.service import get_db
 from app.modules.module_registry.schemas import ModuleDto, ModuleOrderUpdate, ModulePrimaryUpdate
-from app.modules.module_registry.service import list_modules, reorder_modules, set_primary_module
+from app.modules.module_registry.service import (
+    list_modules_with_access,
+    reorder_modules,
+    set_primary_module,
+)
 
 router = APIRouter(
     prefix="/modules",
@@ -18,17 +23,21 @@ router = APIRouter(
 
 
 @router.get("", response_model=list[ModuleDto])
-def get_modules(db: Session = Depends(get_db)) -> list[ModuleDto]:
-    """Возвращает доступные модули для текущего пользователя.
-    На этом этапе доступ = все модули, без RBAC и бизнес-логики.
+def get_modules(
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[ModuleDto]:
+    """Возвращает модули с флагом доступа для текущего пользователя.
+    Backend вычисляет доступ по ролям и остаётся источником истины.
     """
 
-    return list_modules(db)
+    return list_modules_with_access(db, current_user.id)
 
 
 @router.patch("/primary", response_model=list[ModuleDto])
 def update_primary_module(
     payload: ModulePrimaryUpdate,
+    current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ModuleDto]:
     """Назначает основной модуль или сбрасывает его.
@@ -36,7 +45,8 @@ def update_primary_module(
     """
 
     try:
-        return set_primary_module(db, payload.module_id)
+        set_primary_module(db, payload.module_id)
+        return list_modules_with_access(db, current_user.id)
     except ValueError as exc:
         if str(exc) == "module_not_found":
             raise HTTPException(
@@ -49,6 +59,7 @@ def update_primary_module(
 @router.patch("/order", response_model=list[ModuleDto])
 def update_modules_order(
     payload: ModuleOrderUpdate,
+    current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[ModuleDto]:
     """Обновляет порядок всех модулей.
@@ -56,7 +67,8 @@ def update_modules_order(
     """
 
     try:
-        return reorder_modules(db, payload.ordered_ids)
+        reorder_modules(db, payload.ordered_ids)
+        return list_modules_with_access(db, current_user.id)
     except ValueError as exc:
         if str(exc) in {"duplicate_ids", "incomplete_ids"}:
             raise HTTPException(
