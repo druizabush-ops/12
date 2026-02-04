@@ -1,16 +1,16 @@
 import React from "react";
+import { useParams } from "react-router-dom";
 
 import { useModules } from "../hooks/useModules";
 import { moduleRegistry } from "../modules/registry";
 import { ModuleFallback } from "./ModuleFallback";
 
-export type ModuleContainerProps = {
-  moduleId?: string;
-  modulePath?: string;
-};
-
-export const ModuleContainer: React.FC<ModuleContainerProps> = ({ moduleId, modulePath }) => {
+export const ModuleContainer: React.FC = () => {
+  const { modulePath } = useParams<{ modulePath: string }>();
   const { modules, isLoading, error } = useModules();
+
+  console.log("[ModuleContainer] route param modulePath =", modulePath);
+  console.log("[ModuleContainer] available modules =", modules);
 
   // BLOCK 14 — подготовительный UI-слой: контейнер ничего не знает о маршрутизации.
   const resolvedModule = React.useMemo(() => {
@@ -18,16 +18,14 @@ export const ModuleContainer: React.FC<ModuleContainerProps> = ({ moduleId, modu
       return undefined;
     }
 
-    if (moduleId) {
-      return modules.find((moduleItem) => moduleItem.id === moduleId);
-    }
-
     if (modulePath) {
       return modules.find((moduleItem) => moduleItem.path === modulePath);
     }
 
     return undefined;
-  }, [modules, moduleId, modulePath]);
+  }, [modules, modulePath]);
+
+  console.log("[ModuleContainer] resolved module =", resolvedModule);
 
   if (isLoading) {
     return <ModuleFallback state="loading" />;
@@ -50,6 +48,8 @@ export const ModuleContainer: React.FC<ModuleContainerProps> = ({ moduleId, modu
   if (!ModuleComponent) {
     return <ModuleFallback state="not_implemented" />;
   }
+
+  console.log("[ModuleContainer] render module component for =", resolvedModule?.path);
 
   return <ModuleComponent />;
 };
