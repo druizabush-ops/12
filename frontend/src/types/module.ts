@@ -8,4 +8,5 @@ export type PlatformModule = {
   path: string;
   order: number;
   is_primary: boolean;
+  has_access: boolean;
 };
