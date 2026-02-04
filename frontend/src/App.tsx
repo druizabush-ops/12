@@ -3,6 +3,7 @@
 
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
+import { ModuleContainer } from "./components/ModuleContainer";
 import HelpPage from "./pages/HelpPage";
 import LoginPage from "./pages/LoginPage";
 import RequireAuth from "./routes/RequireAuth";
@@ -22,6 +23,7 @@ const App = () => (
     >
       <Route index element={<HelpPage />} />
       <Route path="help" element={<HelpPage />} />
+      <Route path="modules/:modulePath" element={<ModuleContainer />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
