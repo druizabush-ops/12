@@ -46,6 +46,14 @@ def upgrade() -> None:
                 "order": 0,
                 "is_primary": True,
             },
+            {
+                "id": "admin",
+                "name": "admin",
+                "title": "Администрирование",
+                "path": "admin",
+                "order": 1,
+                "is_primary": False,
+            },
         ],
     )
 
