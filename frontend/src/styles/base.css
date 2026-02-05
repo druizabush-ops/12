@@ -341,3 +341,110 @@ body {
     transform: rotate(360deg);
   }
 }
+
+.admin-tabs {
+  display: flex;
+  gap: 12px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-create-role {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-create-role input {
+  flex: 1;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.admin-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.admin-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.admin-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.admin-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 10px;
+  text-align: left;
+}
+
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.admin-modal {
+  width: min(620px, 100%);
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.admin-modal ul {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.admin-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
