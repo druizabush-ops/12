@@ -69,3 +69,24 @@ class RoleModule(Base):
         ForeignKey("platform_modules.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+class RoleModulePermission(Base):
+    """Тонкие права роли внутри модуля.
+    Хранит именованные permission-флаги на уровне роль+модуль.
+    """
+
+    __tablename__ = "auth_role_module_permissions"
+
+    role_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("auth_roles.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    module_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("platform_modules.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    permission: Mapped[str] = mapped_column(String(64), primary_key=True)
+    is_allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

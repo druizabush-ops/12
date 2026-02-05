@@ -71,6 +71,11 @@ def _init_db() -> None:
             "Таблица auth_role_modules не найдена. "
             "Перед запуском backend необходимо выполнить alembic upgrade head."
         )
+    if not inspector.has_table("auth_role_module_permissions"):
+        raise RuntimeError(
+            "Таблица auth_role_module_permissions не найдена. "
+            "Перед запуском backend необходимо выполнить alembic upgrade head."
+        )
 
 
 @app.on_event("startup")
