@@ -9,4 +9,9 @@ export type PlatformModule = {
   order: number;
   is_primary: boolean;
   has_access: boolean;
+  permissions?: Record<string, boolean>;
+};
+
+export type ModuleRuntimeProps = {
+  permissions?: Record<string, boolean>;
 };

@@ -26,6 +26,7 @@ export const ModuleContainer: React.FC = () => {
   }, [modules, modulePath]);
 
   console.log("[ModuleContainer] resolved module =", resolvedModule);
+  console.log("[ModuleContainer] module permissions =", resolvedModule?.permissions);
 
   if (isLoading) {
     return <ModuleFallback state="loading" />;
@@ -51,5 +52,5 @@ export const ModuleContainer: React.FC = () => {
 
   console.log("[ModuleContainer] render module component for =", resolvedModule?.path);
 
-  return <ModuleComponent />;
+  return <ModuleComponent permissions={resolvedModule.permissions ?? {}} />;
 };

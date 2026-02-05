@@ -19,6 +19,7 @@ class ModuleDto(BaseModel):
     order: int
     is_primary: bool
     has_access: bool
+    permissions: dict[str, bool] = Field(default_factory=dict)
 
 
 class ModulePrimaryUpdate(BaseModel):

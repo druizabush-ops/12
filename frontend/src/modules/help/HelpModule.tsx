@@ -1,9 +1,10 @@
 import { APP_NAME } from "../../config/appConfig";
+import { ModuleRuntimeProps } from "../../types/module";
 
 // BLOCK 18 SDK contract (UI module):
-// ✅ Can: render module UI, keep local UI state, receive future platform props.
-// ❌ Cannot: fetch API directly, implement RBAC/permissions, navigate, or import container/fallback/router internals.
-const HelpModule = () => {
+// ✅ Can: render module UI, keep local UI state, receive platform props as pure data.
+// ❌ Cannot: fetch API directly, compute RBAC/permissions, navigate, or import container/fallback/router internals.
+const HelpModule = (_props: ModuleRuntimeProps) => {
   console.log("[HelpModule] initialized");
 
   return (

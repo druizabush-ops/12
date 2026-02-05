@@ -12,6 +12,7 @@ type ModuleDto = {
   order: number;
   is_primary: boolean;
   has_access: boolean;
+  permissions?: Record<string, boolean>;
 };
 
 const normalizeModule = (module: ModuleDto): PlatformModule => ({
@@ -22,6 +23,7 @@ const normalizeModule = (module: ModuleDto): PlatformModule => ({
   order: module.order,
   is_primary: module.is_primary,
   has_access: module.has_access,
+  permissions: module.permissions ?? {},
 });
 
 export const fetchModules = async (token: string): Promise<PlatformModule[]> => {
