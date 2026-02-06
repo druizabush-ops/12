@@ -45,3 +45,28 @@ python -m alembic -c alembic.ini upgrade head
 
 Если один из этапов не проходит, в логах появляется понятная причина, а приложение
 останавливает запуск по принципу fail-fast.
+
+## Event Core (BLOCK 22, Hybrid)
+
+Backend поддерживает минимальный event core по модели `events + read aggregates`:
+
+- `domain_events` хранит факты истории в едином формате: `id`, `type`, `entity`, `entity_id`, `payload`, `occurred_at`;
+- `EventPublisher` записывает событие и синхронно вызывает backend-обработчики;
+- обработчики обновляют read-агрегаты (пример: `calendar_day_summary`), а UI читает только агрегированное состояние.
+
+Пример публикации события в будущих модулях backend:
+
+```python
+from app.events import DomainEvent, build_event_publisher
+
+publisher = build_event_publisher()
+event = DomainEvent.create(
+    type="task.created",
+    entity="task",
+    entity_id="task-123",
+    payload={"date": "2026-01-15", "title": "Новая задача"},
+)
+publisher.publish(db, event)
+```
+
+Важно: frontend не подписывается на события напрямую и не содержит бизнес-логику.
