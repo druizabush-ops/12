@@ -448,3 +448,93 @@ body {
   justify-content: flex-end;
   gap: 10px;
 }
+
+.tasks-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+}
+
+.tasks-calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.tasks-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tasks-day {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 10px;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  cursor: pointer;
+}
+
+.tasks-day.active {
+  border-color: var(--accent);
+}
+
+.tasks-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tasks-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.task-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-item.overdue {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.task-badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.task-badge {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.task-badge-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tasks-attention {
+  margin-top: 20px;
+}

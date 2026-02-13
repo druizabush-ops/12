@@ -2,6 +2,7 @@ import React from "react";
 
 import HelpModule from "./help";
 import AdminModule from "./admin";
+import TasksModule from "./tasks";
 import { ModuleRuntimeProps } from "../types/module";
 
 // BLOCK 18 registration rule:
@@ -11,4 +12,5 @@ import { ModuleRuntimeProps } from "../types/module";
 export const moduleRegistry: Record<string, React.ComponentType<ModuleRuntimeProps>> = {
   help: HelpModule,
   admin: AdminModule,
+  tasks: TasksModule,
 };
