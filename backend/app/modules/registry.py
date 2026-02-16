@@ -10,11 +10,13 @@ from app.modules.auth import router as auth_router
 from app.modules.admin_access import router as admin_access_router
 from app.modules.dummy.manifest import module as dummy_module
 from app.modules.module_registry.api import router as module_registry_router
+from app.modules.tasks import router as tasks_router
 
 modules: list[Module] = [
     Module(name="auth", router=auth_router),
     Module(name="admin_access", router=admin_access_router),
     Module(name="module_registry", router=module_registry_router),
+    Module(name="tasks", router=tasks_router),
     dummy_module,
 ]
 
