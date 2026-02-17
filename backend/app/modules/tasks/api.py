@@ -8,13 +8,22 @@ from sqlalchemy.orm import Session
 from app.core.context import UserContext
 from app.core.security import get_current_user
 from app.modules.auth.service import get_db
-from app.modules.tasks.schemas import CalendarDayDto, TaskCreatePayload, TaskDto, TaskUpdatePayload
+from app.modules.tasks.schemas import (
+    CalendarDayDto,
+    TaskCreatePayload,
+    TaskDto,
+    TaskFolderCreatePayload,
+    TaskFolderDto,
+    TaskUpdatePayload,
+)
 from app.modules.tasks.service import (
     complete_task,
     create_task,
+    create_task_folder,
     is_user_task_editor,
     list_attention_tasks,
     list_calendar_days,
+    list_task_folders,
     list_tasks_for_date,
     update_task,
     verify_task,
@@ -35,11 +44,29 @@ def get_tasks_calendar(
 @router.get("", response_model=list[TaskDto])
 def get_tasks(
     date_value: date = Query(..., alias="date"),
-    include_done: bool = Query(False),
+    folder_id: str | None = Query(default=None),
+    include_done: bool = Query(True),
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TaskDto]:
-    return list_tasks_for_date(db, current_user.id, date_value, include_done)
+    return list_tasks_for_date(db, current_user.id, date_value, folder_id, include_done)
+
+
+@router.get("/folders", response_model=list[TaskFolderDto])
+def get_task_folders(
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[TaskFolderDto]:
+    return list_task_folders(db, current_user.id)
+
+
+@router.post("/folders", response_model=TaskFolderDto, status_code=status.HTTP_201_CREATED)
+def post_task_folder(
+    payload: TaskFolderCreatePayload,
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TaskFolderDto:
+    return create_task_folder(db, current_user.id, payload)
 
 
 @router.post("", response_model=TaskDto, status_code=status.HTTP_201_CREATED)
@@ -48,7 +75,12 @@ def post_task(
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> TaskDto:
-    return create_task(db, current_user.id, payload)
+    try:
+        return create_task(db, current_user.id, payload)
+    except ValueError as exc:
+        if str(exc) == "recurrence_limit_exceeded":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="recurrence_limit_exceeded")
+        raise
 
 
 @router.patch("/{task_id}", response_model=TaskDto)

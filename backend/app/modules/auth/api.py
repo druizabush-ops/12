@@ -8,9 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.context import UserContext
 from app.core.security import get_current_user
-from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserPublic
+from app.modules.auth.schemas import Token, UserCreate, UserListItem, UserLogin, UserPublic
 from app.modules.auth.security import create_access_token
-from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username
+from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username, list_users_for_picker
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,3 +57,8 @@ def me(
     """
 
     return UserPublic(id=current_user.id, username=current_user.username)
+
+
+@router.get("/users", response_model=list[UserListItem])
+def users(db: Session = Depends(get_db)) -> list[UserListItem]:
+    return list_users_for_picker(db)

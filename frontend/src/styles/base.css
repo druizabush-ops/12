@@ -538,3 +538,83 @@ body {
 .tasks-attention {
   margin-top: 20px;
 }
+
+
+.tasks-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.tasks-weekdays .weekend {
+  color: #a77b00;
+}
+
+.tasks-day.weekend {
+  background: color-mix(in srgb, #ffd94d 20%, transparent);
+}
+
+.tasks-day-empty {
+  min-height: 56px;
+}
+
+.tasks-list-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tasks-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.tasks-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.task-item.done {
+  opacity: 0.75;
+  background: color-mix(in srgb, #888 15%, transparent);
+}
+
+.task-title-input {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.task-title-input:focus {
+  font-weight: 800;
+}
+
+.user-dropdown-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.user-dropdown {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 120px;
+  overflow: auto;
+  display: grid;
+}
+
+.user-dropdown button {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  padding: 8px;
+  color: var(--text-primary);
+}
+
+.form-error {
+  color: var(--danger);
+  margin: 0;
+}

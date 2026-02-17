@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import get_engine
 from app.modules.auth.models import Role, User, UserRole
+from app.modules.auth.schemas import UserListItem
 from app.modules.auth.security import hash_password, verify_password
 
 # Импорт Base удалён, потому что схемой управляют миграции, а лишний импорт вводит в заблуждение.
@@ -91,3 +92,8 @@ def assign_default_role(db: Session, user_id: int) -> None:
         return None
     db.add(UserRole(user_id=user_id, role_id=role_id))
     db.commit()
+
+
+def list_users_for_picker(db: Session) -> list[UserListItem]:
+    users = list(db.scalars(select(User).order_by(User.username.asc())))
+    return [UserListItem(id=user.id, full_name=user.username) for user in users]

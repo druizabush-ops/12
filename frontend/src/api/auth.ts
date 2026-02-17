@@ -9,8 +9,15 @@ export type LoginResponse = {
   token_type: string;
 };
 
+export type UserListItem = {
+  id: number;
+  full_name: string;
+};
+
 export const requestLogin = (username: string, password: string) =>
   apiFetch<LoginResponse>("/auth/login", {
     method: "POST",
     body: JSON.stringify({ username, password }),
   });
+
+export const getUsers = (token: string) => apiFetch<UserListItem[]>("/auth/users", { method: "GET" }, token);
