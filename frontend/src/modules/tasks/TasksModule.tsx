@@ -1,12 +1,24 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { TaskDto, completeTask, createTask, getCalendar, getTasksByDate, verifyTask } from "../../api/tasks";
+import {
+  TaskDto,
+  completeTask,
+  createTask,
+  getCalendar,
+  getTaskById,
+  getTasksByDate,
+  verifyTask,
+} from "../../api/tasks";
 import { useAuth } from "../../contexts/AuthContext";
 import { ModuleRuntimeProps } from "../../types/module";
 
 const toDateKey = (value: Date) => value.toISOString().slice(0, 10);
 const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth(), 1);
 const dayOfMonth = (value: string) => Number(value.split("-")[2] ?? "1");
+const parseDateKey = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+};
 
 const priorityFlames = (priority: TaskDto["priority"]) => {
   if (priority === "very_urgent") return "🔥🔥🔥";
@@ -30,6 +42,12 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [priority, setPriority] = useState<"normal" | "urgent" | "very_urgent" | "">("normal");
   const [verifierIdInput, setVerifierIdInput] = useState("");
   const [assigneesInput, setAssigneesInput] = useState("");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
+  const [recurrenceInterval, setRecurrenceInterval] = useState("1");
+  const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState<string[]>([]);
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
+  const [formError, setFormError] = useState("");
 
   const monthDays = useMemo(() => {
     const first = startOfMonth(monthDate);
@@ -48,9 +66,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const doneTasks = useMemo(() => tasks.filter((task) => task.status === "done"), [tasks]);
 
   const loadCalendar = async () => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     const from = toDateKey(startOfMonth(monthDate));
     const to = toDateKey(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0));
     const data = await getCalendar(token, from, to);
@@ -58,9 +74,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   };
 
   const loadTasks = async () => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     setTasks(await getTasksByDate(token, selectedDate));
   };
 
@@ -73,9 +87,25 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     void loadTasks();
   }, [token, selectedDate]);
 
+  const onToday = async () => {
+    const today = new Date();
+    setMonthDate(startOfMonth(today));
+    setSelectedDate(toDateKey(today));
+    await Promise.all([loadCalendar(), loadTasks()]);
+  };
+
   const onCreateTask = async (event: FormEvent) => {
     event.preventDefault();
-    if (!token || !title.trim()) {
+    setFormError("");
+    if (!token || !title.trim()) return;
+
+    const interval = Number(recurrenceInterval || "1");
+    if (isRecurring && interval < 1) {
+      setFormError("Интервал повторения должен быть не меньше 1.");
+      return;
+    }
+    if (isRecurring && recurrenceType === "weekly" && recurrenceDaysOfWeek.length === 0) {
+      setFormError("Для weekly нужно выбрать хотя бы один день недели.");
       return;
     }
 
@@ -92,6 +122,11 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       priority: priority || null,
       verifier_user_id: verifierIdInput ? Number(verifierIdInput) : null,
       assignee_user_ids: assigneeIds,
+      is_recurring: isRecurring,
+      recurrence_type: isRecurring ? recurrenceType : null,
+      recurrence_interval: isRecurring ? interval : null,
+      recurrence_days_of_week: isRecurring && recurrenceType === "weekly" ? recurrenceDaysOfWeek.join(",") : null,
+      recurrence_end_date: isRecurring && recurrenceEndDate ? recurrenceEndDate : null,
     });
 
     setTitle("");
@@ -100,43 +135,60 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setPriority("normal");
     setVerifierIdInput("");
     setAssigneesInput("");
+    setIsRecurring(false);
+    setRecurrenceType("daily");
+    setRecurrenceInterval("1");
+    setRecurrenceDaysOfWeek([]);
+    setRecurrenceEndDate("");
+    setFormError("");
     setIsCreateOpen(false);
     await Promise.all([loadTasks(), loadCalendar()]);
   };
 
   const onComplete = async (taskId: string) => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     await completeTask(token, taskId);
     await loadTasks();
   };
 
   const onVerify = async (taskId: string) => {
-    if (!token) {
-      return;
-    }
+    if (!token) return;
     await verifyTask(token, taskId);
     await loadTasks();
+  };
+
+  const onOpenMasterTask = async (task: TaskDto) => {
+    if (!token || !task.recurrence_master_task_id) return;
+    const master = await getTaskById(token, task.recurrence_master_task_id);
+    const dateKey = master.due_date ?? toDateKey(new Date());
+    const parsedDate = parseDateKey(dateKey);
+    setMonthDate(startOfMonth(parsedDate));
+    setSelectedDate(dateKey);
   };
 
   const renderTaskList = (items: TaskDto[], emptyText: string) => (
     <ul className="tasks-list">
       {items.length === 0 ? <li className="muted">{emptyText}</li> : null}
       {items.map((task) => {
-        const canVerify = task.status === "done_pending_verify" && user?.id === task.verifier_user_id;
+        const canVerify = task.status === "done_pending_verify" && user?.id === task.created_by_user_id;
         return (
-          <li key={task.id} className={task.is_overdue ? "task-item overdue" : "task-item"}>
+          <li key={task.id} className={`task-item ${task.is_overdue ? "overdue" : ""} ${task.status === "done" ? "done" : ""}`}>
             <div>
               <strong>{task.title}</strong>
               <div className="muted">
-                Дедлайн: {task.due_date ?? "без срока"} {task.due_time ?? ""}
+                Дедлайн: {task.due_date ?? "без срока"}
+                {task.due_time ? <span className="task-due-time">{task.due_time}</span> : null}
               </div>
               <div className="task-badges">
                 <span className="task-badge">{priorityFlames(task.priority)}</span>
                 <span className="task-badge">{task.status}</span>
                 {task.is_overdue ? <span className="task-badge task-badge-danger">Просрочено</span> : null}
               </div>
+              {task.recurrence_master_task_id ? (
+                <button type="button" className="link-button" onClick={() => void onOpenMasterTask(task)}>
+                  Открыть исходную задачу
+                </button>
+              ) : null}
             </div>
             <div className="task-actions">
               {task.status === "active" ? (
@@ -168,14 +220,15 @@ const TasksModule = (_: ModuleRuntimeProps) => {
             <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>
               ←
             </button>
-            <strong>
-              {monthDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}
-            </strong>
+            <strong>{monthDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</strong>
             <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>
               →
             </button>
           </div>
-          <div className="tasks-calendar-grid">
+          <button className="secondary-button tasks-today-button" type="button" onClick={() => void onToday()}>
+            Сегодня
+          </button>
+          <div className="tasks-calendar-grid" data-has-events={Object.keys(calendarCounts).length > 0}>
             {monthDays.map((dayKey) => (
               <button
                 key={dayKey}
@@ -184,7 +237,6 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                 onClick={() => setSelectedDate(dayKey)}
               >
                 <span>{dayOfMonth(dayKey)}</span>
-                <small>{calendarCounts[dayKey] ?? 0}</small>
               </button>
             ))}
           </div>
@@ -215,11 +267,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
             <h3>Новая задача</h3>
             <div className="admin-column">
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название" required />
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Описание"
-              />
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Описание" />
               <input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
               <input type="time" value={dueTime} onChange={(event) => setDueTime(event.target.value)} />
               <select value={priority} onChange={(event) => setPriority(event.target.value as typeof priority)}>
@@ -237,6 +285,52 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                 onChange={(event) => setAssigneesInput(event.target.value)}
                 placeholder="ID исполнителей через запятую"
               />
+
+              <label>
+                <input type="checkbox" checked={isRecurring} onChange={(event) => setIsRecurring(event.target.checked)} /> Повторение
+              </label>
+              {isRecurring ? (
+                <div className="admin-column">
+                  <select value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value as typeof recurrenceType)}>
+                    <option value="daily">daily</option>
+                    <option value="weekly">weekly</option>
+                    <option value="monthly">monthly</option>
+                    <option value="yearly">yearly</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    value={recurrenceInterval}
+                    onChange={(event) => setRecurrenceInterval(event.target.value)}
+                    placeholder="Интервал"
+                  />
+                  {recurrenceType === "weekly" ? (
+                    <div className="task-weekdays">
+                      {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                        <label key={day}>
+                          <input
+                            type="checkbox"
+                            checked={recurrenceDaysOfWeek.includes(String(day))}
+                            onChange={(event) => {
+                              setRecurrenceDaysOfWeek((prev) =>
+                                event.target.checked ? [...prev, String(day)] : prev.filter((item) => item !== String(day)),
+                              );
+                            }}
+                          />
+                          {day}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                  <input
+                    type="date"
+                    value={recurrenceEndDate}
+                    onChange={(event) => setRecurrenceEndDate(event.target.value)}
+                    placeholder="Дата окончания"
+                  />
+                </div>
+              ) : null}
+              {formError ? <p className="form-error">{formError}</p> : null}
             </div>
             <div className="admin-modal-actions">
               <button type="button" className="ghost-button" onClick={() => setIsCreateOpen(false)}>

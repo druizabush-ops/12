@@ -538,3 +538,45 @@ body {
 .tasks-attention {
   margin-top: 20px;
 }
+
+.tasks-today-button {
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.tasks-day.active {
+  border: 2px solid #4ea8ff;
+}
+
+.task-item.done {
+  background: color-mix(in srgb, #2fbf71 16%, transparent);
+  border-color: color-mix(in srgb, #2fbf71 50%, var(--border));
+}
+
+.task-due-time {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: color-mix(in srgb, #f5c74d 40%, transparent);
+  border-radius: 6px;
+  padding: 1px 8px;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 0;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.task-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.form-error {
+  color: var(--danger);
+  margin: 0;
+}
