@@ -8,12 +8,18 @@ from sqlalchemy.orm import Session
 from app.core.context import UserContext
 from app.core.security import get_current_user
 from app.modules.auth.service import get_db
-from app.modules.tasks.schemas import CalendarDayDto, TaskCreatePayload, TaskDto, TaskUpdatePayload
+from app.modules.tasks.schemas import (
+    CalendarDayDto,
+    RecurrenceActionPayload,
+    TaskCreatePayload,
+    TaskDto,
+    TaskUpdatePayload,
+)
 from app.modules.tasks.service import (
+    apply_recurrence_action,
     complete_task,
     create_task,
     is_user_task_editor,
-    list_attention_tasks,
     list_calendar_days,
     list_tasks_for_date,
     update_task,
@@ -35,11 +41,10 @@ def get_tasks_calendar(
 @router.get("", response_model=list[TaskDto])
 def get_tasks(
     date_value: date = Query(..., alias="date"),
-    include_done: bool = Query(False),
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TaskDto]:
-    return list_tasks_for_date(db, current_user.id, date_value, include_done)
+    return list_tasks_for_date(db, current_user.id, date_value)
 
 
 @router.post("", response_model=TaskDto, status_code=status.HTTP_201_CREATED)
@@ -95,16 +100,26 @@ def post_verify_task(
     except ValueError as exc:
         if str(exc) == "task_not_found":
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
-        if str(exc) == "verification_not_required":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Проверка не требуется")
         if str(exc) == "forbidden":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Только администратор может подтверждать")
         raise
 
 
-@router.get("/attention", response_model=list[TaskDto])
-def get_attention_tasks(
+@router.post("/{task_id}/recurrence-action", response_model=TaskDto)
+def post_recurrence_action(
+    task_id: str,
+    payload: RecurrenceActionPayload,
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[TaskDto]:
-    return list_attention_tasks(db, current_user.id)
+) -> TaskDto:
+    if not is_user_task_editor(db, task_id, current_user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+
+    try:
+        return apply_recurrence_action(db, task_id, payload, current_user.id)
+    except ValueError as exc:
+        if str(exc) == "task_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+        if str(exc) == "recurrence_not_supported":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Задача не является повторяющейся")
+        raise
