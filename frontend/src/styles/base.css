@@ -538,3 +538,30 @@ body {
 .tasks-attention {
   margin-top: 20px;
 }
+
+.tasks-folders-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0 14px;
+}
+
+.tasks-folders-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.tasks-folders-tabs button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tasks-day.weekend {
+  background: color-mix(in srgb, #ffd84a 22%, transparent);
+}
+
+.task-item.done {
+  opacity: 0.65;
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, Time
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -36,10 +36,24 @@ class Task(Base):
     source_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
+    is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recurrence_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    recurrence_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recurrence_days_of_week: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
+    recurrence_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    recurrence_master_task_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    recurrence_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
 
 Index("ix_tasks_due_date", Task.due_date)
 Index("ix_tasks_due_at", Task.due_at)
 Index("ix_tasks_status", Task.status)
+Index("ix_tasks_recurrence_master", Task.recurrence_master_task_id)
 
 
 class TaskAssignee(Base):
@@ -55,3 +69,20 @@ class TaskAssignee(Base):
         ForeignKey("auth_users.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+class TaskFolder(Base):
+    __tablename__ = "task_folders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    filter_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+Index("ix_task_folders_created_by_user_id", TaskFolder.created_by_user_id)
