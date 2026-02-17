@@ -5,8 +5,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-TaskStatus = Literal["new", "in_progress", "waiting", "done", "canceled"]
-TaskUrgency = Literal["normal", "urgent", "very_urgent"]
+TaskStatus = Literal["active", "done_pending_verify", "done"]
+TaskPriority = Literal["normal", "urgent", "very_urgent"]
+RecurrenceType = Literal["daily", "weekly", "monthly"]
+RecurrenceState = Literal["active", "paused", "stopped"]
 
 
 class CalendarDayDto(BaseModel):
@@ -19,12 +21,16 @@ class TaskCreatePayload(BaseModel):
     description: str | None = None
     due_date: date | None = None
     due_time: time | None = None
-    urgency: TaskUrgency = "normal"
-    requires_verification: bool = False
+    priority: TaskPriority | None = None
     verifier_user_id: int | None = None
     assignee_user_ids: list[int] = Field(default_factory=list)
     source_type: str | None = None
     source_id: str | None = None
+    is_recurring: bool = False
+    recurrence_type: RecurrenceType | None = None
+    recurrence_interval: int | None = None
+    recurrence_days_of_week: str | None = None
+    recurrence_end_date: date | None = None
 
 
 class TaskUpdatePayload(BaseModel):
@@ -32,11 +38,14 @@ class TaskUpdatePayload(BaseModel):
     description: str | None = None
     due_date: date | None = None
     due_time: time | None = None
-    urgency: TaskUrgency | None = None
+    priority: TaskPriority | None = None
     status: TaskStatus | None = None
-    requires_verification: bool | None = None
     verifier_user_id: int | None = None
     assignee_user_ids: list[int] | None = None
+
+
+class RecurrenceActionPayload(BaseModel):
+    action: Literal["pause", "resume", "stop"]
 
 
 class TaskDto(BaseModel):
@@ -45,10 +54,8 @@ class TaskDto(BaseModel):
     description: str | None
     due_date: date | None
     due_time: time | None
-    due_at: datetime | None
     status: TaskStatus
-    urgency: TaskUrgency
-    requires_verification: bool
+    priority: TaskPriority | None
     verifier_user_id: int | None
     created_by_user_id: int
     created_at: datetime
@@ -58,4 +65,11 @@ class TaskDto(BaseModel):
     source_id: str | None
     assignee_user_ids: list[int] = Field(default_factory=list)
     is_overdue: bool
-    needs_attention_for_verifier: bool
+    is_recurring: bool
+    recurrence_type: RecurrenceType | None
+    recurrence_interval: int | None
+    recurrence_days_of_week: str | None
+    recurrence_end_date: date | None
+    recurrence_master_task_id: str | None
+    recurrence_state: RecurrenceState
+    is_hidden: bool
