@@ -10,7 +10,7 @@ from app.core.context import UserContext
 from app.core.security import get_current_user
 from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserPublic
 from app.modules.auth.security import create_access_token
-from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username
+from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username, list_users
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,3 +57,8 @@ def me(
     """
 
     return UserPublic(id=current_user.id, username=current_user.username)
+
+
+@router.get("/users", response_model=list[UserPublic], dependencies=[Depends(get_current_user)])
+def users(db: Session = Depends(get_db)) -> list[UserPublic]:
+    return [UserPublic(id=item.id, username=item.username) for item in list_users(db)]

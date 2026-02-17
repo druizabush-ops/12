@@ -91,3 +91,9 @@ def assign_default_role(db: Session, user_id: int) -> None:
         return None
     db.add(UserRole(user_id=user_id, role_id=role_id))
     db.commit()
+
+
+def list_users(db: Session) -> list[User]:
+    """Возвращает список пользователей для справочника назначений."""
+
+    return list(db.scalars(select(User).order_by(User.id)))

@@ -538,3 +538,19 @@ body {
 .tasks-attention {
   margin-top: 20px;
 }
+
+.task-tabs-wrap { display:flex; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.task-tabs-scroll { display:flex; overflow:auto; gap:8px; }
+.task-tab { border:1px solid var(--border); background:transparent; border-radius:999px; padding:6px 10px; }
+.task-tab.active { background: var(--accent-soft); border-color: var(--accent); }
+.weekday-row { margin-bottom:8px; }
+.weekday { text-align:center; font-size:12px; color:var(--text-secondary); }
+.weekend { background: #fff5cc; }
+.tasks-day { position:relative; }
+.tasks-day-empty { min-height:54px; }
+.done-dot { position:absolute; right:8px; top:8px; width:6px; height:6px; border-radius:50%; background:#9aa0a6; }
+.task-toast { background: #e8fff0; border: 1px solid #8cd6a6; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; }
+.task-form-title { font-size: 24px; font-weight: 700; }
+.recurring-block { display:grid; gap:8px; }
+.weekday-picks { display:flex; gap:8px; flex-wrap:wrap; }
+.task-rec-actions { margin-top: 10px; display:flex; gap:8px; }

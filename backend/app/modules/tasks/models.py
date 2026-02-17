@@ -35,11 +35,30 @@ class Task(Base):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     source_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    folder_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("task_folders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    is_recurring: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    recurrence_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    recurrence_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    recurrence_days_of_week: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    recurrence_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    recurrence_master_task_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("tasks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    recurrence_state: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    is_hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 Index("ix_tasks_due_date", Task.due_date)
 Index("ix_tasks_due_at", Task.due_at)
 Index("ix_tasks_status", Task.status)
+Index("ix_tasks_folder_id", Task.folder_id)
+Index("ix_tasks_recurrence_master_task_id", Task.recurrence_master_task_id)
 
 
 class TaskAssignee(Base):
@@ -55,3 +74,22 @@ class TaskAssignee(Base):
         ForeignKey("auth_users.id", ondelete="CASCADE"),
         primary_key=True,
     )
+
+
+class TaskFolder(Base):
+    __tablename__ = "task_folders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_by_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    show_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    show_overdue: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    show_done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+Index("ix_task_folders_created_by_user_id", TaskFolder.created_by_user_id)
