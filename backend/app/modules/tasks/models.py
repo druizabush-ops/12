@@ -21,11 +21,6 @@ class Task(Base):
     due_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(String(32), nullable=False, default="active")
     priority: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    verifier_user_id: Mapped[int | None] = mapped_column(
-        Integer,
-        ForeignKey("auth_users.id", ondelete="SET NULL"),
-        nullable=True,
-    )
     created_by_user_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("auth_users.id", ondelete="CASCADE"),
@@ -57,6 +52,21 @@ Index("ix_tasks_recurrence_master_task_id", Task.recurrence_master_task_id)
 
 class TaskAssignee(Base):
     __tablename__ = "task_assignees"
+
+    task_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("tasks.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("auth_users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
+class TaskVerifier(Base):
+    __tablename__ = "task_verifiers"
 
     task_id: Mapped[str] = mapped_column(
         String(36),
