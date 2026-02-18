@@ -18,7 +18,7 @@ export type TaskDto = {
   assignee_user_ids: number[];
   is_overdue: boolean;
   is_recurring: boolean;
-  recurrence_type: "daily" | "weekly" | "monthly" | null;
+  recurrence_type: "daily" | "weekly" | "monthly" | "yearly" | null;
   recurrence_interval: number | null;
   recurrence_days_of_week: string | null;
   recurrence_end_date: string | null;
@@ -43,7 +43,7 @@ export type CreateTaskPayload = {
   source_type?: string | null;
   source_id?: string | null;
   is_recurring?: boolean;
-  recurrence_type?: "daily" | "weekly" | "monthly" | null;
+  recurrence_type?: "daily" | "weekly" | "monthly" | "yearly" | null;
   recurrence_interval?: number | null;
   recurrence_days_of_week?: string | null;
   recurrence_end_date?: string | null;
@@ -76,3 +76,7 @@ export const recurrenceAction = (
   id: string,
   action: "pause" | "resume" | "stop",
 ) => apiFetch<TaskDto>(`/tasks/${id}/recurrence-action`, { method: "POST", body: JSON.stringify({ action }) }, token);
+
+
+export const getTaskById = (token: string, id: string) =>
+  apiFetch<TaskDto>(`/tasks/${id}`, { method: "GET" }, token);
