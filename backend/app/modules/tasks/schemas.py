@@ -40,7 +40,7 @@ class TaskCreatePayload(BaseModel):
     due_date: date | None = None
     due_time: time | None = None
     priority: TaskPriority | None = None
-    verifier_user_id: int | None = None
+    verifier_user_ids: list[int] = Field(default_factory=list)
     assignee_user_ids: list[int] = Field(default_factory=list)
     source_type: str | None = None
     source_id: str | None = None
@@ -62,7 +62,7 @@ class TaskUpdatePayload(BaseModel):
     due_time: time | None = None
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
-    verifier_user_id: int | None = None
+    verifier_user_ids: list[int] | None = None
     assignee_user_ids: list[int] | None = None
 
 
@@ -78,7 +78,7 @@ class TaskDto(BaseModel):
     due_time: time | None
     status: TaskStatus
     priority: TaskPriority | None
-    verifier_user_id: int | None
+    verifier_user_ids: list[int] = Field(default_factory=list)
     created_by_user_id: int
     created_at: datetime
     completed_at: datetime | None
@@ -95,3 +95,13 @@ class TaskDto(BaseModel):
     recurrence_master_task_id: str | None
     recurrence_state: RecurrenceState
     is_hidden: bool
+
+
+class TaskBadgeDto(BaseModel):
+    pending_verify_count: int
+    fresh_completed_count: int
+
+
+class TaskUserDto(BaseModel):
+    id: int
+    username: str

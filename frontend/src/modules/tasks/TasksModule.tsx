@@ -2,11 +2,17 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   TaskDto,
+  TaskUserDto,
   completeTask,
   createTask,
-  getCalendar,
+  deleteRecurringChildren,
+  deleteTask,
+  getBadges,
   getTaskById,
   getTasksByDate,
+  getUsers,
+  recurrenceAction,
+  returnActive,
   verifyTask,
 } from "../../api/tasks";
 import { useAuth } from "../../contexts/AuthContext";
@@ -20,19 +26,25 @@ const parseDateKey = (value: string) => {
   return new Date(year, (month || 1) - 1, day || 1);
 };
 
-const priorityFlames = (priority: TaskDto["priority"]) => {
-  if (priority === "very_urgent") return "🔥🔥🔥";
-  if (priority === "urgent") return "🔥🔥";
-  if (priority === "normal") return "🔥";
-  return "—";
+type TaskTab = "assigned" | "verify" | "created";
+
+const tabLabel = (tab: TaskTab) => {
+  if (tab === "verify") return "На проверку";
+  if (tab === "created") return "Поставленные";
+  return "Все задачи";
 };
+
+const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
 const TasksModule = (_: ModuleRuntimeProps) => {
   const { token, user } = useAuth();
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
-  const [calendarCounts, setCalendarCounts] = useState<Record<string, number>>({});
   const [tasks, setTasks] = useState<TaskDto[]>([]);
+  const [taskTab, setTaskTab] = useState<TaskTab>("assigned");
+  const [badges, setBadges] = useState({ pending_verify_count: 0, fresh_completed_count: 0 });
+  const [users, setUsers] = useState<TaskUserDto[]>([]);
+  const [userQuery, setUserQuery] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -40,8 +52,8 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [dueDate, setDueDate] = useState(selectedDate);
   const [dueTime, setDueTime] = useState("");
   const [priority, setPriority] = useState<"normal" | "urgent" | "very_urgent" | "">("normal");
-  const [verifierIdInput, setVerifierIdInput] = useState("");
-  const [assigneesInput, setAssigneesInput] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<number[]>([]);
+  const [verifierIds, setVerifierIds] = useState<number[]>([]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceType, setRecurrenceType] = useState<"daily" | "weekly" | "monthly" | "yearly">("daily");
   const [recurrenceInterval, setRecurrenceInterval] = useState("1");
@@ -58,40 +70,45 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     });
   }, [monthDate]);
 
-  const activeTasks = useMemo(
-    () => tasks.filter((task) => !task.is_overdue && task.status !== "done"),
-    [tasks],
-  );
+  const activeTasks = useMemo(() => tasks.filter((task) => !task.is_overdue && task.status !== "done"), [tasks]);
   const overdueTasks = useMemo(() => tasks.filter((task) => task.is_overdue), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((task) => task.status === "done"), [tasks]);
 
-  const loadCalendar = async () => {
-    if (!token) return;
-    const from = toDateKey(startOfMonth(monthDate));
-    const to = toDateKey(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0));
-    const data = await getCalendar(token, from, to);
-    setCalendarCounts(Object.fromEntries(data.map((item) => [item.date, item.count])));
-  };
+  const filteredUsers = useMemo(
+    () => users.filter((item) => item.username.toLowerCase().includes(userQuery.toLowerCase())),
+    [users, userQuery],
+  );
 
   const loadTasks = async () => {
     if (!token) return;
-    setTasks(await getTasksByDate(token, selectedDate));
+    setTasks(await getTasksByDate(token, selectedDate, taskTab));
+  };
+
+  const loadBadges = async () => {
+    if (!token) return;
+    setBadges(await getBadges(token));
   };
 
   useEffect(() => {
-    void loadCalendar();
-  }, [token, monthDate]);
+    if (!token) return;
+    void getUsers(token).then(setUsers);
+  }, [token]);
 
   useEffect(() => {
     setDueDate(selectedDate);
     void loadTasks();
-  }, [token, selectedDate]);
+    void loadBadges();
+  }, [token, selectedDate, taskTab]);
 
   const onToday = async () => {
     const today = new Date();
+    const dateKey = toDateKey(today);
     setMonthDate(startOfMonth(today));
-    setSelectedDate(toDateKey(today));
-    await Promise.all([loadCalendar(), loadTasks()]);
+    setSelectedDate(dateKey);
+    if (token) {
+      setTasks(await getTasksByDate(token, dateKey, taskTab));
+      setBadges(await getBadges(token));
+    }
   };
 
   const onCreateTask = async (event: FormEvent) => {
@@ -109,18 +126,13 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       return;
     }
 
-    const assigneeIds = assigneesInput
-      .split(",")
-      .map((item) => Number(item.trim()))
-      .filter((value) => Number.isInteger(value) && value > 0);
-
     await createTask(token, {
       title: title.trim(),
       description: description.trim() || null,
       due_date: dueDate || null,
       due_time: dueTime || null,
       priority: priority || null,
-      verifier_user_id: verifierIdInput ? Number(verifierIdInput) : null,
+      verifier_user_ids: verifierIds,
       assignee_user_ids: assigneeIds,
       is_recurring: isRecurring,
       recurrence_type: isRecurring ? recurrenceType : null,
@@ -133,8 +145,8 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setDescription("");
     setDueTime("");
     setPriority("normal");
-    setVerifierIdInput("");
-    setAssigneesInput("");
+    setAssigneeIds([]);
+    setVerifierIds([]);
     setIsRecurring(false);
     setRecurrenceType("daily");
     setRecurrenceInterval("1");
@@ -142,19 +154,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setRecurrenceEndDate("");
     setFormError("");
     setIsCreateOpen(false);
-    await Promise.all([loadTasks(), loadCalendar()]);
-  };
-
-  const onComplete = async (taskId: string) => {
-    if (!token) return;
-    await completeTask(token, taskId);
-    await loadTasks();
-  };
-
-  const onVerify = async (taskId: string) => {
-    if (!token) return;
-    await verifyTask(token, taskId);
-    await loadTasks();
+    await Promise.all([loadTasks(), loadBadges()]);
   };
 
   const onOpenMasterTask = async (task: TaskDto) => {
@@ -166,40 +166,47 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setSelectedDate(dateKey);
   };
 
+  const togglePickerId = (ids: number[], setIds: (value: number[]) => void, id: number) => {
+    setIds(ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]);
+  };
+
   const renderTaskList = (items: TaskDto[], emptyText: string) => (
     <ul className="tasks-list">
       {items.length === 0 ? <li className="muted">{emptyText}</li> : null}
       {items.map((task) => {
-        const canVerify = task.status === "done_pending_verify" && user?.id === task.created_by_user_id;
+        const canVerify = task.status === "done_pending_verify" && (task.verifier_user_ids.includes(user?.id ?? 0) || user?.id === task.created_by_user_id);
+        const canReturn = task.status !== "active" && user?.id === task.created_by_user_id;
+        const canComplete = task.status === "active" && (task.assignee_user_ids.includes(user?.id ?? 0) || task.created_by_user_id === user?.id);
         return (
           <li key={task.id} className={`task-item ${task.is_overdue ? "overdue" : ""} ${task.status === "done" ? "done" : ""}`}>
             <div>
               <strong>{task.title}</strong>
-              <div className="muted">
-                Дедлайн: {task.due_date ?? "без срока"}
-                {task.due_time ? <span className="task-due-time">{task.due_time}</span> : null}
-              </div>
+              <div className="muted">Дедлайн: {task.due_date ?? "без срока"}{task.due_time ? ` ${task.due_time}` : ""}</div>
               <div className="task-badges">
-                <span className="task-badge">{priorityFlames(task.priority)}</span>
                 <span className="task-badge">{task.status}</span>
+                {task.status === "done_pending_verify" ? <span className="task-badge task-badge-success">Можно проверить</span> : null}
                 {task.is_overdue ? <span className="task-badge task-badge-danger">Просрочено</span> : null}
               </div>
               {task.recurrence_master_task_id ? (
                 <button type="button" className="link-button" onClick={() => void onOpenMasterTask(task)}>
-                  Открыть исходную задачу
+                  Подробнее
                 </button>
               ) : null}
             </div>
             <div className="task-actions">
-              {task.status === "active" ? (
-                <button type="button" className="secondary-button" onClick={() => onComplete(task.id)}>
-                  Выполнить
-                </button>
+              {canComplete ? <button type="button" className="secondary-button" onClick={() => void completeTask(token!, task.id).then(loadTasks)}>Выполнить</button> : null}
+              {canVerify ? <button type="button" className="ghost-button" onClick={() => void verifyTask(token!, task.id).then(loadTasks)}>Проверить</button> : null}
+              {canReturn ? <button type="button" className="ghost-button" onClick={() => void returnActive(token!, task.id).then(loadTasks)}>Вернуть в активные</button> : null}
+              {task.status === "active" && user?.id === task.created_by_user_id ? (
+                <button type="button" className="ghost-button" onClick={() => void deleteTask(token!, task.id).then(loadTasks)}>Удалить</button>
               ) : null}
-              {canVerify ? (
-                <button type="button" className="ghost-button" onClick={() => onVerify(task.id)}>
-                  Проверить
-                </button>
+              {task.is_recurring && !task.recurrence_master_task_id && user?.id === task.created_by_user_id ? (
+                <>
+                  <button type="button" className="ghost-button" onClick={() => void recurrenceAction(token!, task.id, "pause").then(loadTasks)}>Пауза</button>
+                  <button type="button" className="ghost-button" onClick={() => void recurrenceAction(token!, task.id, "resume").then(loadTasks)}>Возобновить</button>
+                  <button type="button" className="ghost-button" onClick={() => void recurrenceAction(token!, task.id, "stop").then(loadTasks)}>Стоп</button>
+                  <button type="button" className="ghost-button" onClick={() => void deleteRecurringChildren(token!, task.id, "all").then(loadTasks)}>Удалить children</button>
+                </>
               ) : null}
             </div>
           </li>
@@ -212,50 +219,47 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     <div className="page tasks-page">
       <div className="page-header">
         <h2>Задачи</h2>
-        <p>Календарь задач и контроль просроченных обязательств.</p>
+      </div>
+      <div className="admin-tabs">
+        {(["assigned", "verify", "created"] as TaskTab[]).map((tab) => (
+          <button key={tab} type="button" className={taskTab === tab ? "primary-button" : "secondary-button"} onClick={() => setTaskTab(tab)}>
+            {tabLabel(tab)}
+            {tab === "verify" ? <span className="tasks-tab-badge">{badges.pending_verify_count}/{badges.fresh_completed_count}</span> : null}
+          </button>
+        ))}
       </div>
       <div className="tasks-layout">
         <section className="page-card tasks-calendar">
           <div className="tasks-calendar-header">
-            <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>
-              ←
-            </button>
+            <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1))}>←</button>
             <strong>{monthDate.toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</strong>
-            <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>
-              →
-            </button>
+            <button className="ghost-button" type="button" onClick={() => setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1))}>→</button>
           </div>
-          <button className="secondary-button tasks-today-button" type="button" onClick={() => void onToday()}>
-            Сегодня
-          </button>
-          <div className="tasks-calendar-grid" data-has-events={Object.keys(calendarCounts).length > 0}>
-            {monthDays.map((dayKey) => (
-              <button
-                key={dayKey}
-                type="button"
-                className={dayKey === selectedDate ? "tasks-day active" : "tasks-day"}
-                onClick={() => setSelectedDate(dayKey)}
-              >
-                <span>{dayOfMonth(dayKey)}</span>
-              </button>
-            ))}
+          <button className="secondary-button tasks-today-button" type="button" onClick={() => void onToday()}>Сегодня</button>
+          <div className="tasks-weekdays">{weekDays.map((day, i) => <span key={day} className={i >= 5 ? "weekend" : ""}>{day}</span>)}</div>
+          <div className="tasks-calendar-grid">
+            {monthDays.map((dayKey) => {
+              const day = parseDateKey(dayKey);
+              const jsDay = day.getDay();
+              const isWeekend = jsDay === 0 || jsDay === 6;
+              return (
+                <button key={dayKey} type="button" className={`tasks-day ${dayKey === selectedDate ? "active" : ""} ${isWeekend ? "weekend" : ""}`} onClick={() => setSelectedDate(dayKey)}>
+                  <span>{dayOfMonth(dayKey)}</span>
+                </button>
+              );
+            })}
           </div>
         </section>
 
         <section className="page-card tasks-list-wrap">
           <div className="tasks-list-header">
-            <h3>Задачи на {selectedDate}</h3>
-            <button className="primary-button" type="button" onClick={() => setIsCreateOpen(true)}>
-              Новая задача
-            </button>
+            <h3>{tabLabel(taskTab)}: {selectedDate}</h3>
+            <button className="primary-button" type="button" onClick={() => setIsCreateOpen(true)}>Новая задача</button>
           </div>
-
           <h4>Актуальные</h4>
           {renderTaskList(activeTasks, "Нет актуальных задач.")}
-
           <h4>Просроченные</h4>
           {renderTaskList(overdueTasks, "Нет просроченных задач.")}
-
           <h4>Выполненные</h4>
           {renderTaskList(doneTasks, "Нет выполненных задач.")}
         </section>
@@ -275,70 +279,40 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                 <option value="urgent">urgent</option>
                 <option value="very_urgent">very_urgent</option>
               </select>
-              <input
-                value={verifierIdInput}
-                onChange={(event) => setVerifierIdInput(event.target.value)}
-                placeholder="ID проверяющего (опционально)"
-              />
-              <input
-                value={assigneesInput}
-                onChange={(event) => setAssigneesInput(event.target.value)}
-                placeholder="ID исполнителей через запятую"
-              />
+              <input value={userQuery} onChange={(event) => setUserQuery(event.target.value)} placeholder="Поиск пользователя" />
+              <div className="task-picker-columns">
+                <div>
+                  <strong>Исполнители</strong>
+                  <div className="task-chips">{assigneeIds.map((id) => <span key={`a-${id}`} className="task-chip">{users.find((u) => u.id === id)?.username ?? id}</span>)}</div>
+                  <ul className="task-user-list">{filteredUsers.map((item) => <li key={`a-${item.id}`}><label><input type="checkbox" checked={assigneeIds.includes(item.id)} onChange={() => togglePickerId(assigneeIds, setAssigneeIds, item.id)} /> {item.username}</label></li>)}</ul>
+                </div>
+                <div>
+                  <strong>Проверяющие</strong>
+                  <div className="task-chips">{verifierIds.map((id) => <span key={`v-${id}`} className="task-chip">{users.find((u) => u.id === id)?.username ?? id}</span>)}</div>
+                  <ul className="task-user-list">{filteredUsers.map((item) => <li key={`v-${item.id}`}><label><input type="checkbox" checked={verifierIds.includes(item.id)} onChange={() => togglePickerId(verifierIds, setVerifierIds, item.id)} /> {item.username}</label></li>)}</ul>
+                </div>
+              </div>
 
-              <label>
-                <input type="checkbox" checked={isRecurring} onChange={(event) => setIsRecurring(event.target.checked)} /> Повторение
-              </label>
+              <label><input type="checkbox" checked={isRecurring} onChange={(event) => setIsRecurring(event.target.checked)} /> Повторение</label>
               {isRecurring ? (
                 <div className="admin-column">
                   <select value={recurrenceType} onChange={(event) => setRecurrenceType(event.target.value as typeof recurrenceType)}>
-                    <option value="daily">daily</option>
-                    <option value="weekly">weekly</option>
-                    <option value="monthly">monthly</option>
-                    <option value="yearly">yearly</option>
+                    <option value="daily">daily</option><option value="weekly">weekly</option><option value="monthly">monthly</option><option value="yearly">yearly</option>
                   </select>
-                  <input
-                    type="number"
-                    min={1}
-                    value={recurrenceInterval}
-                    onChange={(event) => setRecurrenceInterval(event.target.value)}
-                    placeholder="Интервал"
-                  />
+                  <input type="number" min={1} value={recurrenceInterval} onChange={(event) => setRecurrenceInterval(event.target.value)} placeholder="Интервал" />
                   {recurrenceType === "weekly" ? (
-                    <div className="task-weekdays">
-                      {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                        <label key={day}>
-                          <input
-                            type="checkbox"
-                            checked={recurrenceDaysOfWeek.includes(String(day))}
-                            onChange={(event) => {
-                              setRecurrenceDaysOfWeek((prev) =>
-                                event.target.checked ? [...prev, String(day)] : prev.filter((item) => item !== String(day)),
-                              );
-                            }}
-                          />
-                          {day}
-                        </label>
-                      ))}
-                    </div>
+                    <div className="task-weekdays">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((day, index) => (
+                      <label key={day}><input type="checkbox" checked={recurrenceDaysOfWeek.includes(String(index + 1))} onChange={(event) => setRecurrenceDaysOfWeek((prev) => event.target.checked ? [...prev, String(index + 1)] : prev.filter((item) => item !== String(index + 1)))} />{day}</label>
+                    ))}</div>
                   ) : null}
-                  <input
-                    type="date"
-                    value={recurrenceEndDate}
-                    onChange={(event) => setRecurrenceEndDate(event.target.value)}
-                    placeholder="Дата окончания"
-                  />
+                  <input type="date" value={recurrenceEndDate} onChange={(event) => setRecurrenceEndDate(event.target.value)} placeholder="Дата окончания" />
                 </div>
               ) : null}
               {formError ? <p className="form-error">{formError}</p> : null}
             </div>
             <div className="admin-modal-actions">
-              <button type="button" className="ghost-button" onClick={() => setIsCreateOpen(false)}>
-                Отмена
-              </button>
-              <button type="submit" className="primary-button">
-                Создать
-              </button>
+              <button type="button" className="ghost-button" onClick={() => setIsCreateOpen(false)}>Отмена</button>
+              <button type="submit" className="primary-button">Создать</button>
             </div>
           </form>
         </div>
