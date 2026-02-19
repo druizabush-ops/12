@@ -34,8 +34,14 @@ from app.modules.tasks.service import (
     verify_task,
 )
 
-router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/tasks",
+    tags=["tasks"],
+    dependencies=[Depends(get_current_user)],
+)
 
+
+# ───────────────── USERS ─────────────────
 
 @router.get("/users", response_model=list[TaskUserDto])
 def get_task_users(
@@ -46,6 +52,8 @@ def get_task_users(
     return list_users(db)
 
 
+# ───────────────── BADGES ─────────────────
+
 @router.get("/badges", response_model=TaskBadgeDto)
 def get_badges(
     current_user: UserContext = Depends(get_current_user),
@@ -53,6 +61,8 @@ def get_badges(
 ) -> TaskBadgeDto:
     return get_task_badges(db, current_user.id)
 
+
+# ───────────────── CALENDAR ─────────────────
 
 @router.get("/calendar", response_model=list[CalendarDayDto])
 def get_tasks_calendar(
@@ -64,6 +74,8 @@ def get_tasks_calendar(
 ) -> list[CalendarDayDto]:
     return list_calendar_days(db, current_user.id, from_date, to_date, tab)
 
+
+# ───────────────── LIST ─────────────────
 
 @router.get("", response_model=list[TaskDto])
 def get_tasks(
@@ -82,12 +94,15 @@ def get_task_by_id(
     db: Session = Depends(get_db),
 ) -> TaskDto:
     if not is_user_task_viewer(db, task_id, current_user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+        raise HTTPException(status_code=403, detail="Недостаточно прав")
+
     try:
         return get_task_dto(db, task_id, current_user.id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+        raise HTTPException(status_code=404, detail="Задача не найдена")
 
+
+# ───────────────── CREATE ─────────────────
 
 @router.post("", response_model=TaskDto, status_code=status.HTTP_201_CREATED)
 def post_task(
@@ -98,6 +113,8 @@ def post_task(
     return create_task(db, current_user.id, payload)
 
 
+# ───────────────── UPDATE ─────────────────
+
 @router.patch("/{task_id}", response_model=TaskDto)
 def patch_task(
     task_id: str,
@@ -107,35 +124,56 @@ def patch_task(
 ) -> TaskDto:
     try:
         return update_task(db, task_id, payload, current_user.id)
+
     except ValueError as exc:
         code = str(exc)
+
         if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
         if code in {"forbidden", "master_task_edit_forbidden"}:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
         if code == "status_must_be_active":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Редактирование доступно только для active")
+            raise HTTPException(
+                status_code=400,
+                detail="Редактирование доступно только для active",
+            )
+
         raise
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+# ───────────────── DELETE (FIXED) ─────────────────
+
+@router.delete("/{task_id}", response_model=dict, status_code=status.HTTP_200_OK)
 def remove_task(
     task_id: str,
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> None:
+) -> dict:
     try:
         delete_task(db, task_id, current_user.id)
+        return {"deleted": True}
+
     except ValueError as exc:
         code = str(exc)
+
         if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
-        if code in {"forbidden", "master_has_children"}:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Удаление недоступно")
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
+        if code == "forbidden":
+            raise HTTPException(status_code=403, detail="Удаление недоступно")
+
         if code == "status_must_be_active":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Удаление доступно только для active")
+            raise HTTPException(
+                status_code=400,
+                detail="Удаление доступно только для active",
+            )
+
         raise
 
+
+# ───────────────── RETURN ACTIVE ─────────────────
 
 @router.post("/{task_id}/return-active", response_model=TaskDto)
 def post_return_active(
@@ -145,14 +183,20 @@ def post_return_active(
 ) -> TaskDto:
     try:
         return return_task_to_active(db, task_id, current_user.id)
+
     except ValueError as exc:
         code = str(exc)
-        if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
-        if code == "forbidden":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Возврат в active невозможен")
 
+        if code == "task_not_found":
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
+        if code == "forbidden":
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+        raise HTTPException(status_code=400, detail="Возврат в active невозможен")
+
+
+# ───────────────── COMPLETE ─────────────────
 
 @router.post("/{task_id}/complete", response_model=TaskDto)
 def post_complete_task(
@@ -162,14 +206,23 @@ def post_complete_task(
 ) -> TaskDto:
     try:
         return complete_task(db, task_id, current_user.id)
+
     except ValueError as exc:
         code = str(exc)
-        if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
-        if code == "forbidden":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Complete доступен только из active")
 
+        if code == "task_not_found":
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
+        if code == "forbidden":
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+        raise HTTPException(
+            status_code=400,
+            detail="Complete доступен только из active",
+        )
+
+
+# ───────────────── VERIFY ─────────────────
 
 @router.post("/{task_id}/verify", response_model=TaskDto)
 def post_verify_task(
@@ -179,16 +232,29 @@ def post_verify_task(
 ) -> TaskDto:
     try:
         return verify_task(db, task_id, current_user.id)
+
     except ValueError as exc:
         code = str(exc)
+
         if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
         if code == "forbidden":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verify доступен только из done_pending_verify")
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
+        raise HTTPException(
+            status_code=400,
+            detail="Verify доступен только из done_pending_verify",
+        )
 
 
-@router.delete("/{task_id}/recurrence-children", response_model=dict)
+# ───────────────── RECURRENCE CHILDREN ─────────────────
+
+@router.delete(
+    "/{task_id}/recurrence-children",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+)
 def remove_recurrence_children(
     task_id: str,
     mode: str = Query("all"),
@@ -197,16 +263,28 @@ def remove_recurrence_children(
     db: Session = Depends(get_db),
 ) -> dict:
     try:
-        deleted = delete_recurrence_children(db, task_id, current_user.id, mode, pivot_date)
+        deleted = delete_recurrence_children(
+            db,
+            task_id,
+            current_user.id,
+            mode,
+            pivot_date,
+        )
         return {"deleted": deleted}
+
     except ValueError as exc:
         code = str(exc)
+
         if code == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
         if code in {"forbidden", "recurrence_not_supported"}:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Операция недоступна")
+            raise HTTPException(status_code=403, detail="Операция недоступна")
+
         raise
 
+
+# ───────────────── RECURRENCE ACTION ─────────────────
 
 @router.post("/{task_id}/recurrence-action", response_model=TaskDto)
 def post_recurrence_action(
@@ -217,11 +295,20 @@ def post_recurrence_action(
 ) -> TaskDto:
     try:
         return apply_recurrence_action(db, task_id, payload, current_user.id)
+
     except ValueError as exc:
-        if str(exc) == "task_not_found":
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
-        if str(exc) == "recurrence_not_supported":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Задача не является повторяющейся")
-        if str(exc) == "forbidden":
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+        code = str(exc)
+
+        if code == "task_not_found":
+            raise HTTPException(status_code=404, detail="Задача не найдена")
+
+        if code == "recurrence_not_supported":
+            raise HTTPException(
+                status_code=400,
+                detail="Задача не является повторяющейся",
+            )
+
+        if code == "forbidden":
+            raise HTTPException(status_code=403, detail="Недостаточно прав")
+
         raise
