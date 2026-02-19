@@ -188,20 +188,20 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
     now_time = now_local.time().replace(tzinfo=None)
     tab_filter = _build_tab_filter(current_user_id, tab)
 
-    active_query = select(Task).where(
-        Task.due_date == selected_date,
-        Task.status.in_([ACTIVE_STATUS, PENDING_VERIFY_STATUS]),
-        Task.is_hidden.is_(False),
-        tab_filter,
-    )
     overdue_query = select(Task).where(
-        Task.status != DONE_STATUS,
+        Task.status.in_([ACTIVE_STATUS, PENDING_VERIFY_STATUS]),
         Task.is_hidden.is_(False),
         tab_filter,
         or_(
             Task.due_date < today,
             and_(Task.due_date == today, Task.due_time.is_not(None), Task.due_time < now_time),
         ),
+    )
+    active_query = select(Task).where(
+        Task.due_date == selected_date,
+        Task.status.in_([ACTIVE_STATUS, PENDING_VERIFY_STATUS]),
+        Task.is_hidden.is_(False),
+        tab_filter,
     )
     done_query = select(Task).where(
         Task.due_date == selected_date,
@@ -210,8 +210,9 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
         tab_filter,
     )
 
-    active_tasks = list(db.scalars(active_query))
     overdue_tasks = list(db.scalars(overdue_query))
+    overdue_ids = {task.id for task in overdue_tasks}
+    active_tasks = [task for task in db.scalars(active_query) if task.id not in overdue_ids]
     done_tasks = list(db.scalars(done_query))
     all_tasks = active_tasks + overdue_tasks + done_tasks
     assignee_map = _get_linked_user_ids_map(db, [task.id for task in all_tasks], TaskAssignee)
@@ -236,7 +237,18 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
 def get_task_badges(db: Session, current_user_id: int) -> TaskBadgeDto:
     base_filter = exists(select(TaskVerifier.task_id).where(TaskVerifier.task_id == Task.id, TaskVerifier.user_id == current_user_id))
     pending = db.scalar(select(func.count(Task.id)).where(Task.status == PENDING_VERIFY_STATUS, Task.is_hidden.is_(False), base_filter)) or 0
-    return TaskBadgeDto(pending_verify_count=pending, fresh_completed_count=pending)
+    fresh_completed = (
+        db.scalar(
+            select(func.count(Task.id)).where(
+                Task.status == PENDING_VERIFY_STATUS,
+                Task.completed_at.is_not(None),
+                Task.is_hidden.is_(False),
+                base_filter,
+            )
+        )
+        or 0
+    )
+    return TaskBadgeDto(pending_verify_count=pending, fresh_completed_count=fresh_completed)
 
 
 def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -> TaskDto:
@@ -262,6 +274,8 @@ def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -
     )
     db.add(task)
     assignee_ids = sorted({user_id for user_id in payload.assignee_user_ids if user_id > 0})
+    if not assignee_ids:
+        assignee_ids = [current_user_id]
     verifier_ids = sorted({user_id for user_id in payload.verifier_user_ids if user_id > 0})
     for user_id in assignee_ids:
         db.add(TaskAssignee(task_id=task.id, user_id=user_id))
@@ -372,10 +386,8 @@ def verify_task(db: Session, task_id: str, current_user_id: int) -> TaskDto:
     if task.status != PENDING_VERIFY_STATUS:
         raise ValueError("invalid_status_transition")
 
-    is_admin = user_can_manage_access(db, current_user_id)
-    is_creator = task.created_by_user_id == current_user_id
     is_verifier = db.scalar(select(TaskVerifier.task_id).where(TaskVerifier.task_id == task_id, TaskVerifier.user_id == current_user_id).limit(1)) is not None
-    if not (is_admin or is_creator or is_verifier):
+    if not is_verifier:
         raise ValueError("forbidden")
 
     task.status = DONE_STATUS

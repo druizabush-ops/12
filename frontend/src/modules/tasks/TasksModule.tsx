@@ -18,12 +18,34 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { ModuleRuntimeProps } from "../../types/module";
 
-const toDateKey = (value: Date) => value.toISOString().slice(0, 10);
+const toDateKey = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth(), 1);
 const dayOfMonth = (value: string) => Number(value.split("-")[2] ?? "1");
 const parseDateKey = (value: string) => {
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, (month || 1) - 1, day || 1);
+};
+
+const generateCalendar = (year: number, month: number) => {
+  const firstDayOfMonth = new Date(year, month, 1);
+  const offset = (firstDayOfMonth.getDay() + 6) % 7;
+  const startDate = new Date(firstDayOfMonth);
+  startDate.setDate(firstDayOfMonth.getDate() - offset);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(startDate);
+    day.setDate(startDate.getDate() + index);
+    return {
+      date: day,
+      isCurrentMonth: day.getMonth() === month,
+      isWeekend: index % 7 >= 5,
+    };
+  });
 };
 
 type TaskTab = "assigned" | "verify" | "created";
@@ -60,19 +82,14 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState<string[]>([]);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [formError, setFormError] = useState("");
+  const [detailsTask, setDetailsTask] = useState<TaskDto | null>(null);
 
-  const monthDays = useMemo(() => {
-    const first = startOfMonth(monthDate);
-    const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-    return Array.from({ length: daysInMonth }, (_, index) => {
-      const day = new Date(first.getFullYear(), first.getMonth(), index + 1);
-      return toDateKey(day);
-    });
-  }, [monthDate]);
+  const calendarDays = useMemo(() => generateCalendar(monthDate.getFullYear(), monthDate.getMonth()), [monthDate]);
 
   const activeTasks = useMemo(() => tasks.filter((task) => !task.is_overdue && task.status !== "done"), [tasks]);
   const overdueTasks = useMemo(() => tasks.filter((task) => task.is_overdue), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((task) => task.status === "done"), [tasks]);
+  const hasPendingVerify = useMemo(() => tasks.some((task) => task.status === "done_pending_verify"), [tasks]);
 
   const filteredUsers = useMemo(
     () => users.filter((item) => item.username.toLowerCase().includes(userQuery.toLowerCase())),
@@ -187,11 +204,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                 {task.status === "done_pending_verify" ? <span className="task-badge task-badge-success">Можно проверить</span> : null}
                 {task.is_overdue ? <span className="task-badge task-badge-danger">Просрочено</span> : null}
               </div>
-              {task.recurrence_master_task_id ? (
-                <button type="button" className="link-button" onClick={() => void onOpenMasterTask(task)}>
-                  Подробнее
-                </button>
-              ) : null}
+              <button type="button" className="link-button" onClick={() => setDetailsTask(task)}>Подробнее</button>
             </div>
             <div className="task-actions">
               {canComplete ? <button type="button" className="secondary-button" onClick={() => void completeTask(token!, task.id).then(loadTasks)}>Выполнить</button> : null}
@@ -224,7 +237,12 @@ const TasksModule = (_: ModuleRuntimeProps) => {
         {(["assigned", "verify", "created"] as TaskTab[]).map((tab) => (
           <button key={tab} type="button" className={taskTab === tab ? "primary-button" : "secondary-button"} onClick={() => setTaskTab(tab)}>
             {tabLabel(tab)}
-            {tab === "verify" ? <span className="tasks-tab-badge">{badges.pending_verify_count}/{badges.fresh_completed_count}</span> : null}
+            {tab === "verify" ? (
+              <span className="tasks-tab-badge">
+                {badges.pending_verify_count}
+                {hasPendingVerify ? <span className="tasks-tab-attention" title="Есть задачи на проверке">!</span> : null}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -238,12 +256,16 @@ const TasksModule = (_: ModuleRuntimeProps) => {
           <button className="secondary-button tasks-today-button" type="button" onClick={() => void onToday()}>Сегодня</button>
           <div className="tasks-weekdays">{weekDays.map((day, i) => <span key={day} className={i >= 5 ? "weekend" : ""}>{day}</span>)}</div>
           <div className="tasks-calendar-grid">
-            {monthDays.map((dayKey) => {
-              const day = parseDateKey(dayKey);
-              const jsDay = day.getDay();
-              const isWeekend = jsDay === 0 || jsDay === 6;
+            {calendarDays.map((cell) => {
+              const dayKey = toDateKey(cell.date);
+              const isToday = dayKey === toDateKey(new Date());
               return (
-                <button key={dayKey} type="button" className={`tasks-day ${dayKey === selectedDate ? "active" : ""} ${isWeekend ? "weekend" : ""}`} onClick={() => setSelectedDate(dayKey)}>
+                <button
+                  key={dayKey}
+                  type="button"
+                  className={`tasks-day ${dayKey === selectedDate ? "active" : ""} ${cell.isWeekend ? "weekend" : ""} ${cell.isCurrentMonth ? "" : "outside"} ${isToday ? "today" : ""}`}
+                  onClick={() => setSelectedDate(dayKey)}
+                >
                   <span>{dayOfMonth(dayKey)}</span>
                 </button>
               );
@@ -315,6 +337,49 @@ const TasksModule = (_: ModuleRuntimeProps) => {
               <button type="submit" className="primary-button">Создать</button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {detailsTask ? (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal">
+            <h3>{detailsTask.title}</h3>
+            <div className="admin-column task-details-grid">
+              <p><strong>Описание:</strong> {detailsTask.description || "—"}</p>
+              <p><strong>Исполнители:</strong> {detailsTask.assignee_user_ids.map((id) => users.find((u) => u.id === id)?.username ?? id).join(", ") || "—"}</p>
+              <p><strong>Проверяющие:</strong> {detailsTask.verifier_user_ids.map((id) => users.find((u) => u.id === id)?.username ?? id).join(", ") || "—"}</p>
+              <p><strong>Дедлайн:</strong> {detailsTask.due_date ?? "без срока"}{detailsTask.due_time ? ` ${detailsTask.due_time}` : ""}</p>
+              <p><strong>Приоритет:</strong> {detailsTask.priority ?? "—"}</p>
+              <p><strong>Created by:</strong> {users.find((u) => u.id === detailsTask.created_by_user_id)?.username ?? detailsTask.created_by_user_id}</p>
+              <p><strong>Created at:</strong> {detailsTask.created_at}</p>
+              <p><strong>Completed at:</strong> {detailsTask.completed_at ?? "—"}</p>
+              <p><strong>Verified at:</strong> {detailsTask.verified_at ?? "—"}</p>
+              <p>
+                <strong>Recurrence:</strong> {detailsTask.is_recurring ? `${detailsTask.recurrence_type ?? "custom"}, интервал ${detailsTask.recurrence_interval ?? 1}` : "нет"}
+              </p>
+            </div>
+            <div className="admin-modal-actions">
+              {(detailsTask.status === "active" && (detailsTask.assignee_user_ids.includes(user?.id ?? 0) || detailsTask.created_by_user_id === user?.id)) ? (
+                <button type="button" className="secondary-button" onClick={() => void completeTask(token!, detailsTask.id).then(async () => { await loadTasks(); setDetailsTask(null); })}>Выполнить</button>
+              ) : null}
+              {(detailsTask.status === "done_pending_verify" && detailsTask.verifier_user_ids.includes(user?.id ?? 0)) ? (
+                <button type="button" className="ghost-button" onClick={() => void verifyTask(token!, detailsTask.id).then(async () => { await loadTasks(); setDetailsTask(null); })}>Проверить</button>
+              ) : null}
+              {(detailsTask.status !== "active" && user?.id === detailsTask.created_by_user_id) ? (
+                <button type="button" className="ghost-button" onClick={() => void returnActive(token!, detailsTask.id).then(async () => { await loadTasks(); setDetailsTask(null); })}>Вернуть в активные</button>
+              ) : null}
+              {(detailsTask.status === "active" && user?.id === detailsTask.created_by_user_id) ? (
+                <button type="button" className="ghost-button" onClick={() => void deleteTask(token!, detailsTask.id).then(async () => { await loadTasks(); setDetailsTask(null); })}>Удалить</button>
+              ) : null}
+              {(detailsTask.status === "active" && (user?.id === detailsTask.created_by_user_id || (user as { role_name?: string } | null)?.role_name === "admin")) ? (
+                <button type="button" className="ghost-button">Редактировать</button>
+              ) : null}
+              {detailsTask.recurrence_master_task_id ? (
+                <button type="button" className="ghost-button" onClick={() => void onOpenMasterTask(detailsTask).then(() => setDetailsTask(null))}>К родителю</button>
+              ) : null}
+              <button type="button" className="ghost-button" onClick={() => setDetailsTask(null)}>Закрыть</button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
