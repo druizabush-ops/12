@@ -170,6 +170,12 @@ def remove_task(
                 detail="Удаление доступно только для active",
             )
 
+        if code == "task_has_children":
+            raise HTTPException(status_code=400, detail="Нельзя удалить задачу с дочерними")
+
+        if code == "master_has_done_children":
+            raise HTTPException(status_code=400, detail="Нельзя удалить master с выполненными children")
+
         raise
 
 
@@ -280,6 +286,9 @@ def remove_recurrence_children(
 
         if code in {"forbidden", "recurrence_not_supported"}:
             raise HTTPException(status_code=403, detail="Операция недоступна")
+
+        if code == "delete_done_forbidden":
+            raise HTTPException(status_code=400, detail="Удаление выполненных задач запрещено")
 
         raise
 
