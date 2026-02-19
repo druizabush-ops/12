@@ -170,6 +170,12 @@ def remove_task(
                 detail="Удаление доступно только для active",
             )
 
+        if code == "delete_done_forbidden":
+            raise HTTPException(
+                status_code=400,
+                detail="Удаление выполненной задачи невозможно",
+            )
+
         raise
 
 
@@ -216,10 +222,13 @@ def post_complete_task(
         if code == "forbidden":
             raise HTTPException(status_code=403, detail="Недостаточно прав")
 
-        raise HTTPException(
-            status_code=400,
-            detail="Complete доступен только из active",
-        )
+        if code == "complete_only_active":
+            raise HTTPException(
+                status_code=400,
+                detail="Complete доступен только для active",
+            )
+
+        raise
 
 
 # ───────────────── VERIFY ─────────────────

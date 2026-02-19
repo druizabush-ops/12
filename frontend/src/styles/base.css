@@ -641,3 +641,27 @@ body {
   padding: 2px 8px;
   font-size: 12px;
 }
+
+
+.tasks-day-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.tasks-tab-alert {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.task-actions {
+  flex-wrap: wrap;
+}

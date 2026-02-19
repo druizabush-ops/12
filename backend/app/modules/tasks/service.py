@@ -190,7 +190,11 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
 
     active_query = select(Task).where(
         Task.due_date == selected_date,
-        Task.status.in_([ACTIVE_STATUS, PENDING_VERIFY_STATUS]),
+        Task.status == ACTIVE_STATUS,
+        or_(
+            Task.due_date > today,
+            and_(Task.due_date == today, or_(Task.due_time.is_(None), Task.due_time >= now_time)),
+        ),
         Task.is_hidden.is_(False),
         tab_filter,
     )
@@ -236,7 +240,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
 def get_task_badges(db: Session, current_user_id: int) -> TaskBadgeDto:
     base_filter = exists(select(TaskVerifier.task_id).where(TaskVerifier.task_id == Task.id, TaskVerifier.user_id == current_user_id))
     pending = db.scalar(select(func.count(Task.id)).where(Task.status == PENDING_VERIFY_STATUS, Task.is_hidden.is_(False), base_filter)) or 0
-    return TaskBadgeDto(pending_verify_count=pending, fresh_completed_count=pending)
+    return TaskBadgeDto(pending_verify_count=pending, fresh_completed_flag=pending > 0)
 
 
 def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -> TaskDto:
@@ -262,6 +266,8 @@ def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -
     )
     db.add(task)
     assignee_ids = sorted({user_id for user_id in payload.assignee_user_ids if user_id > 0})
+    if not assignee_ids:
+        assignee_ids = [current_user_id]
     verifier_ids = sorted({user_id for user_id in payload.verifier_user_ids if user_id > 0})
     for user_id in assignee_ids:
         db.add(TaskAssignee(task_id=task.id, user_id=user_id))
@@ -347,7 +353,7 @@ def complete_task(db: Session, task_id: str, current_user_id: int) -> TaskDto:
     if not task:
         raise ValueError("task_not_found")
     if task.status != ACTIVE_STATUS:
-        raise ValueError("invalid_status_transition")
+        raise ValueError("complete_only_active")
 
     is_admin = user_can_manage_access(db, current_user_id)
     is_assignee = db.scalar(select(TaskAssignee.task_id).where(TaskAssignee.task_id == task_id, TaskAssignee.user_id == current_user_id).limit(1)) is not None
@@ -390,6 +396,8 @@ def delete_task(db: Session, task_id: str, current_user_id: int) -> None:
         raise ValueError("task_not_found")
     if not _can_edit_or_delete(db, task, current_user_id):
         raise ValueError("forbidden")
+    if task.status == DONE_STATUS:
+        raise ValueError("delete_done_forbidden")
     _assert_active(task)
 
     if task.is_recurring and not task.recurrence_master_task_id:
