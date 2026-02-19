@@ -600,10 +600,6 @@ body {
   background: color-mix(in srgb, #f5c74d 24%, transparent);
 }
 
-.tasks-tab-badge {
-  margin-left: 8px;
-  font-size: 12px;
-}
 
 .task-badge-success {
   border-color: #2fbf71;
@@ -640,4 +636,17 @@ body {
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 12px;
+}
+
+
+.tasks-day.outside {
+  opacity: 0.45;
+}
+
+.tasks-tab-badge {
+  margin-left: 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
 }

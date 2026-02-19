@@ -98,8 +98,8 @@ class TaskDto(BaseModel):
 
 
 class TaskBadgeDto(BaseModel):
-    pending_verify_count: int
-    fresh_completed_count: int
+    verify_total: int
+    verify_need_action: bool
 
 
 class TaskUserDto(BaseModel):

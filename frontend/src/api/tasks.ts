@@ -33,8 +33,8 @@ export type TaskCalendarDay = {
 };
 
 export type TaskBadgeDto = {
-  pending_verify_count: number;
-  fresh_completed_count: number;
+  verify_total: number;
+  verify_need_action: boolean;
 };
 
 export type TaskUserDto = {
