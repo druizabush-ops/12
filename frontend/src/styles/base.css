@@ -580,3 +580,20 @@ body {
   color: var(--danger);
   margin: 0;
 }
+
+.tasks-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.tasks-day-empty {
+  min-height: 1px;
+}
+
+.tasks-verify-alert {
+  margin-left: 8px;
+}

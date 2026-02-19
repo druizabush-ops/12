@@ -11,6 +11,7 @@ from app.modules.auth.service import get_db
 from app.modules.tasks.schemas import (
     CalendarDayDto,
     RecurrenceActionPayload,
+    TaskBadgesDto,
     TaskCreatePayload,
     TaskDto,
     TaskUpdatePayload,
@@ -19,6 +20,8 @@ from app.modules.tasks.service import (
     apply_recurrence_action,
     complete_task,
     create_task,
+    delete_task,
+    get_task_badges,
     get_task_dto,
     is_user_task_editor,
     list_calendar_days,
@@ -38,6 +41,14 @@ def get_tasks_calendar(
     db: Session = Depends(get_db),
 ) -> list[CalendarDayDto]:
     return list_calendar_days(db, current_user.id, from_date, to_date)
+
+
+@router.get("/badges", response_model=TaskBadgesDto)
+def get_badges(
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> TaskBadgesDto:
+    return get_task_badges(db, current_user.id)
 
 
 @router.get("", response_model=list[TaskDto])
@@ -107,6 +118,8 @@ def post_complete_task(
     except ValueError as exc:
         if str(exc) == "forbidden":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+        if str(exc) == "complete_only_active":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Complete доступен только для active")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
 
 
@@ -143,4 +156,24 @@ def post_recurrence_action(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
         if str(exc) == "recurrence_not_supported":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Задача не является повторяющейся")
+        raise
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_task(
+    task_id: str,
+    current_user: UserContext = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        delete_task(db, task_id, current_user.id)
+    except ValueError as exc:
+        if str(exc) == "task_not_found":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задача не найдена")
+        if str(exc) == "forbidden":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+        if str(exc) == "done_delete_forbidden":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Удаление выполненной задачи невозможно")
+        if str(exc) == "delete_only_active":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Удаление доступно только для active")
         raise

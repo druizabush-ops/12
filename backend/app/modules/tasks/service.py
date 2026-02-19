@@ -8,10 +8,12 @@ from sqlalchemy import and_, delete, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.admin_access.service import user_can_manage_access
+from app.modules.auth.models import User
 from app.modules.tasks.models import Task, TaskAssignee
 from app.modules.tasks.schemas import (
     CalendarDayDto,
     RecurrenceActionPayload,
+    TaskBadgesDto,
     TaskCreatePayload,
     TaskDto,
     TaskUpdatePayload,
@@ -64,6 +66,15 @@ def _get_assignee_ids_map(db: Session, task_ids: list[str]) -> dict[str, list[in
     return result
 
 
+def _get_usernames_map(db: Session, user_ids: list[int]) -> dict[int, str]:
+    unique_ids = sorted(set(user_ids))
+    if not unique_ids:
+        return {}
+
+    rows = db.execute(select(User.id, User.username).where(User.id.in_(unique_ids))).all()
+    return {user_id: username for user_id, username in rows}
+
+
 def _is_overdue(task: Task, now_local: datetime) -> bool:
     if task.status == DONE_STATUS or task.is_hidden or not task.due_date:
         return False
@@ -78,7 +89,7 @@ def _is_overdue(task: Task, now_local: datetime) -> bool:
     return task.due_time < now_local.time().replace(tzinfo=None)
 
 
-def _to_dto(task: Task, assignee_ids: list[int], now_local: datetime) -> TaskDto:
+def _to_dto(task: Task, assignee_ids: list[int], usernames_map: dict[int, str], now_local: datetime) -> TaskDto:
     return TaskDto(
         id=task.id,
         title=task.title,
@@ -88,13 +99,16 @@ def _to_dto(task: Task, assignee_ids: list[int], now_local: datetime) -> TaskDto
         status=task.status,
         priority=task.priority,
         verifier_user_id=task.verifier_user_id,
+        verifier_name=usernames_map.get(task.verifier_user_id) if task.verifier_user_id else None,
         created_by_user_id=task.created_by_user_id,
+        created_by_name=usernames_map.get(task.created_by_user_id, f"ID {task.created_by_user_id}"),
         created_at=task.created_at,
         completed_at=task.completed_at,
         verified_at=task.verified_at,
         source_type=task.source_type,
         source_id=task.source_id,
         assignee_user_ids=assignee_ids,
+        assignee_names=[usernames_map.get(user_id, f"ID {user_id}") for user_id in assignee_ids],
         is_overdue=_is_overdue(task, now_local),
         is_recurring=task.is_recurring,
         recurrence_type=task.recurrence_type,
@@ -181,7 +195,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
 
     active_query = select(Task).where(
         Task.due_date == selected_date,
-        Task.status.in_(["active", "done_pending_verify"]),
+        Task.status == "active",
         Task.is_hidden.is_(False),
     )
     done_query = select(Task).where(
@@ -195,7 +209,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
     now_time = now_local.time().replace(tzinfo=None)
 
     overdue_query = select(Task).where(
-        Task.status != DONE_STATUS,
+        Task.status == "active",
         Task.is_hidden.is_(False),
         or_(
             Task.due_date < today,
@@ -218,9 +232,16 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
 
     all_tasks = active_tasks + overdue_tasks + done_tasks
     assignee_map = _get_assignee_ids_map(db, [task.id for task in all_tasks])
+    user_ids: list[int] = []
+    for task in all_tasks:
+        user_ids.append(task.created_by_user_id)
+        if task.verifier_user_id:
+            user_ids.append(task.verifier_user_id)
+        user_ids.extend(assignee_map.get(task.id, []))
+    usernames_map = _get_usernames_map(db, user_ids)
 
     active_sorted = sorted(
-        [_to_dto(task, assignee_map.get(task.id, []), now_local) for task in active_tasks],
+        [_to_dto(task, assignee_map.get(task.id, []), usernames_map, now_local) for task in active_tasks],
         key=lambda item: (
             -_priority_weight(item.priority),
             item.due_time or time.max,
@@ -228,7 +249,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
         ),
     )
     overdue_sorted = sorted(
-        [_to_dto(task, assignee_map.get(task.id, []), now_local) for task in overdue_tasks],
+        [_to_dto(task, assignee_map.get(task.id, []), usernames_map, now_local) for task in overdue_tasks],
         key=lambda item: (
             -((today - item.due_date).days if item.due_date else -1),
             -_priority_weight(item.priority),
@@ -236,7 +257,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
         ),
     )
     done_sorted = sorted(
-        [_to_dto(task, assignee_map.get(task.id, []), now_local) for task in done_tasks],
+        [_to_dto(task, assignee_map.get(task.id, []), usernames_map, now_local) for task in done_tasks],
         key=lambda item: item.verified_at or datetime.min.replace(tzinfo=timezone.utc),
         reverse=True,
     )
@@ -244,6 +265,8 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date) 
 
 
 def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -> TaskDto:
+    assignee_ids = sorted(set(payload.assignee_user_ids)) or [current_user_id]
+
     task = Task(
         id=str(uuid4()),
         title=payload.title,
@@ -266,7 +289,6 @@ def create_task(db: Session, current_user_id: int, payload: TaskCreatePayload) -
         is_hidden=False,
     )
     db.add(task)
-    assignee_ids = sorted(set(payload.assignee_user_ids))
     for user_id in assignee_ids:
         db.add(TaskAssignee(task_id=task.id, user_id=user_id))
 
@@ -313,7 +335,10 @@ def get_task_dto(db: Session, task_id: str, current_user_id: int) -> TaskDto:
     if not task:
         raise ValueError("task_not_found")
     assignee_ids = _get_assignee_ids_map(db, [task.id]).get(task.id, [])
-    return _to_dto(task, assignee_ids, _now_local())
+    user_ids = [task.created_by_user_id, *assignee_ids]
+    if task.verifier_user_id:
+        user_ids.append(task.verifier_user_id)
+    return _to_dto(task, assignee_ids, _get_usernames_map(db, user_ids), _now_local())
 
 
 def update_task(db: Session, task_id: str, payload: TaskUpdatePayload, current_user_id: int) -> TaskDto:
@@ -355,6 +380,8 @@ def complete_task(db: Session, task_id: str, current_user_id: int) -> TaskDto:
     is_creator = task.created_by_user_id == current_user_id
     if not (is_creator or is_assignee or is_admin):
         raise ValueError("forbidden")
+    if task.status != "active":
+        raise ValueError("complete_only_active")
 
     now = _now()
     task.completed_at = now
@@ -380,6 +407,39 @@ def verify_task(db: Session, task_id: str, current_user_id: int) -> TaskDto:
     task.verified_at = _now()
     db.commit()
     return get_task_dto(db, task_id, current_user_id)
+
+
+def delete_task(db: Session, task_id: str, current_user_id: int) -> None:
+    task = get_task(db, task_id)
+    if not task:
+        raise ValueError("task_not_found")
+
+    if task.status == DONE_STATUS:
+        raise ValueError("done_delete_forbidden")
+    if task.status != "active":
+        raise ValueError("delete_only_active")
+
+    if not is_user_task_editor(db, task_id, current_user_id):
+        raise ValueError("forbidden")
+
+    db.delete(task)
+    db.commit()
+
+
+def get_task_badges(db: Session, current_user_id: int) -> TaskBadgesDto:
+    is_admin = user_can_manage_access(db, current_user_id)
+    verify_query = select(func.count(Task.id)).where(
+        Task.status == "done_pending_verify",
+        Task.is_hidden.is_(False),
+    )
+    if not is_admin:
+        verify_query = verify_query.where(Task.created_by_user_id == current_user_id)
+
+    pending_verify_count = db.scalar(verify_query) or 0
+    return TaskBadgesDto(
+        pending_verify_count=pending_verify_count,
+        fresh_completed_flag=pending_verify_count > 0,
+    )
 
 
 def apply_recurrence_action(

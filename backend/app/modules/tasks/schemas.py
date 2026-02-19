@@ -80,12 +80,15 @@ class TaskDto(BaseModel):
     priority: TaskPriority | None
     verifier_user_id: int | None
     created_by_user_id: int
+    created_by_name: str
     created_at: datetime
     completed_at: datetime | None
     verified_at: datetime | None
     source_type: str | None
     source_id: str | None
     assignee_user_ids: list[int] = Field(default_factory=list)
+    assignee_names: list[str] = Field(default_factory=list)
+    verifier_name: str | None = None
     is_overdue: bool
     is_recurring: bool
     recurrence_type: RecurrenceType | None
@@ -95,3 +98,8 @@ class TaskDto(BaseModel):
     recurrence_master_task_id: str | None
     recurrence_state: RecurrenceState
     is_hidden: bool
+
+
+class TaskBadgesDto(BaseModel):
+    pending_verify_count: int
+    fresh_completed_flag: bool

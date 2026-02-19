@@ -5,8 +5,10 @@ import {
   completeTask,
   createTask,
   getCalendar,
+  getTaskBadges,
   getTaskById,
   getTasksByDate,
+  updateTask,
   verifyTask,
 } from "../../api/tasks";
 import { useAuth } from "../../contexts/AuthContext";
@@ -27,13 +29,17 @@ const priorityFlames = (priority: TaskDto["priority"]) => {
   return "—";
 };
 
-const TasksModule = (_: ModuleRuntimeProps) => {
+const TasksModule = ({ permissions }: ModuleRuntimeProps) => {
   const { token, user } = useAuth();
+  const isAdmin = Boolean(permissions?.manage_access || permissions?.admin || permissions?.can_manage_access);
+
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
   const [calendarCounts, setCalendarCounts] = useState<Record<string, number>>({});
   const [tasks, setTasks] = useState<TaskDto[]>([]);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<TaskDto | null>(null);
+  const [detailTask, setDetailTask] = useState<TaskDto | null>(null);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -49,6 +55,9 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [formError, setFormError] = useState("");
 
+  const [pendingVerifyCount, setPendingVerifyCount] = useState(0);
+  const [freshCompletedFlag, setFreshCompletedFlag] = useState(false);
+
   const monthDays = useMemo(() => {
     const first = startOfMonth(monthDate);
     const daysInMonth = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
@@ -58,12 +67,47 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     });
   }, [monthDate]);
 
-  const activeTasks = useMemo(
-    () => tasks.filter((task) => !task.is_overdue && task.status !== "done"),
-    [tasks],
-  );
-  const overdueTasks = useMemo(() => tasks.filter((task) => task.is_overdue), [tasks]);
+  const calendarShift = useMemo(() => {
+    const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+    const jsWeekday = firstDay.getDay();
+    return (jsWeekday + 6) % 7;
+  }, [monthDate]);
+
+  const activeTasks = useMemo(() => tasks.filter((task) => task.status === "active" && !task.is_overdue), [tasks]);
+  const overdueTasks = useMemo(() => tasks.filter((task) => task.status === "active" && task.is_overdue), [tasks]);
   const doneTasks = useMemo(() => tasks.filter((task) => task.status === "done"), [tasks]);
+
+  const resetForm = () => {
+    setTitle("");
+    setDescription("");
+    setDueDate(selectedDate);
+    setDueTime("");
+    setPriority("normal");
+    setVerifierIdInput("");
+    setAssigneesInput("");
+    setIsRecurring(false);
+    setRecurrenceType("daily");
+    setRecurrenceInterval("1");
+    setRecurrenceDaysOfWeek([]);
+    setRecurrenceEndDate("");
+    setFormError("");
+  };
+
+  const fillFormFromTask = (task: TaskDto) => {
+    setTitle(task.title);
+    setDescription(task.description ?? "");
+    setDueDate(task.due_date ?? "");
+    setDueTime(task.due_time ?? "");
+    setPriority(task.priority ?? "normal");
+    setVerifierIdInput(task.verifier_user_id ? String(task.verifier_user_id) : "");
+    setAssigneesInput(task.assignee_user_ids.join(", "));
+    setIsRecurring(task.is_recurring);
+    setRecurrenceType(task.recurrence_type ?? "daily");
+    setRecurrenceInterval(String(task.recurrence_interval ?? 1));
+    setRecurrenceDaysOfWeek((task.recurrence_days_of_week ?? "").split(",").filter(Boolean));
+    setRecurrenceEndDate(task.recurrence_end_date ?? "");
+    setFormError("");
+  };
 
   const loadCalendar = async () => {
     if (!token) return;
@@ -78,6 +122,13 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setTasks(await getTasksByDate(token, selectedDate));
   };
 
+  const loadBadges = async () => {
+    if (!token) return;
+    const badges = await getTaskBadges(token);
+    setPendingVerifyCount(badges.pending_verify_count);
+    setFreshCompletedFlag(badges.fresh_completed_flag);
+  };
+
   useEffect(() => {
     void loadCalendar();
   }, [token, monthDate]);
@@ -87,6 +138,10 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     void loadTasks();
   }, [token, selectedDate]);
 
+  useEffect(() => {
+    void loadBadges();
+  }, [token]);
+
   const onToday = async () => {
     const today = new Date();
     setMonthDate(startOfMonth(today));
@@ -94,7 +149,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     await Promise.all([loadCalendar(), loadTasks()]);
   };
 
-  const onCreateTask = async (event: FormEvent) => {
+  const onSubmitTask = async (event: FormEvent) => {
     event.preventDefault();
     setFormError("");
     if (!token || !title.trim()) return;
@@ -114,7 +169,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       .map((item) => Number(item.trim()))
       .filter((value) => Number.isInteger(value) && value > 0);
 
-    await createTask(token, {
+    const payload = {
       title: title.trim(),
       description: description.trim() || null,
       due_date: dueDate || null,
@@ -127,34 +182,30 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       recurrence_interval: isRecurring ? interval : null,
       recurrence_days_of_week: isRecurring && recurrenceType === "weekly" ? recurrenceDaysOfWeek.join(",") : null,
       recurrence_end_date: isRecurring && recurrenceEndDate ? recurrenceEndDate : null,
-    });
+    };
 
-    setTitle("");
-    setDescription("");
-    setDueTime("");
-    setPriority("normal");
-    setVerifierIdInput("");
-    setAssigneesInput("");
-    setIsRecurring(false);
-    setRecurrenceType("daily");
-    setRecurrenceInterval("1");
-    setRecurrenceDaysOfWeek([]);
-    setRecurrenceEndDate("");
-    setFormError("");
+    if (editingTask) {
+      await updateTask(token, editingTask.id, payload);
+    } else {
+      await createTask(token, payload);
+    }
+
     setIsCreateOpen(false);
-    await Promise.all([loadTasks(), loadCalendar()]);
+    setEditingTask(null);
+    resetForm();
+    await Promise.all([loadTasks(), loadCalendar(), loadBadges()]);
   };
 
   const onComplete = async (taskId: string) => {
     if (!token) return;
     await completeTask(token, taskId);
-    await loadTasks();
+    await Promise.all([loadTasks(), loadBadges()]);
   };
 
   const onVerify = async (taskId: string) => {
     if (!token) return;
     await verifyTask(token, taskId);
-    await loadTasks();
+    await Promise.all([loadTasks(), loadBadges()]);
   };
 
   const onOpenMasterTask = async (task: TaskDto) => {
@@ -166,11 +217,24 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setSelectedDate(dateKey);
   };
 
+  const openCreateModal = () => {
+    setEditingTask(null);
+    resetForm();
+    setIsCreateOpen(true);
+  };
+
+  const openEditModal = (task: TaskDto) => {
+    setEditingTask(task);
+    fillFormFromTask(task);
+    setIsCreateOpen(true);
+  };
+
   const renderTaskList = (items: TaskDto[], emptyText: string) => (
     <ul className="tasks-list">
       {items.length === 0 ? <li className="muted">{emptyText}</li> : null}
       {items.map((task) => {
         const canVerify = task.status === "done_pending_verify" && user?.id === task.created_by_user_id;
+        const canEdit = task.status === "active" && (user?.id === task.created_by_user_id || isAdmin);
         return (
           <li key={task.id} className={`task-item ${task.is_overdue ? "overdue" : ""} ${task.status === "done" ? "done" : ""}`}>
             <div>
@@ -191,6 +255,14 @@ const TasksModule = (_: ModuleRuntimeProps) => {
               ) : null}
             </div>
             <div className="task-actions">
+              <button type="button" className="ghost-button" onClick={() => setDetailTask(task)}>
+                Подробнее
+              </button>
+              {canEdit ? (
+                <button type="button" className="ghost-button" onClick={() => openEditModal(task)}>
+                  Редактировать
+                </button>
+              ) : null}
               {task.status === "active" ? (
                 <button type="button" className="secondary-button" onClick={() => onComplete(task.id)}>
                   Выполнить
@@ -212,7 +284,10 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     <div className="page tasks-page">
       <div className="page-header">
         <h2>Задачи</h2>
-        <p>Календарь задач и контроль просроченных обязательств.</p>
+        <p>
+          Календарь задач и контроль просроченных обязательств. Проверка: <strong>{pendingVerifyCount}</strong>
+          {freshCompletedFlag ? <span className="task-badge task-badge-danger tasks-verify-alert">!</span> : null}
+        </p>
       </div>
       <div className="tasks-layout">
         <section className="page-card tasks-calendar">
@@ -228,7 +303,15 @@ const TasksModule = (_: ModuleRuntimeProps) => {
           <button className="secondary-button tasks-today-button" type="button" onClick={() => void onToday()}>
             Сегодня
           </button>
+          <div className="tasks-calendar-weekdays">
+            {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
           <div className="tasks-calendar-grid" data-has-events={Object.keys(calendarCounts).length > 0}>
+            {Array.from({ length: calendarShift }).map((_, idx) => (
+              <div key={`empty-${idx}`} className="tasks-day-empty" />
+            ))}
             {monthDays.map((dayKey) => (
               <button
                 key={dayKey}
@@ -245,7 +328,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
         <section className="page-card tasks-list-wrap">
           <div className="tasks-list-header">
             <h3>Задачи на {selectedDate}</h3>
-            <button className="primary-button" type="button" onClick={() => setIsCreateOpen(true)}>
+            <button className="primary-button" type="button" onClick={openCreateModal}>
               Новая задача
             </button>
           </div>
@@ -263,8 +346,8 @@ const TasksModule = (_: ModuleRuntimeProps) => {
 
       {isCreateOpen ? (
         <div className="admin-modal-backdrop">
-          <form className="admin-modal" onSubmit={onCreateTask}>
-            <h3>Новая задача</h3>
+          <form className="admin-modal" onSubmit={onSubmitTask}>
+            <h3>{editingTask ? "Редактировать задачу" : "Новая задача"}</h3>
             <div className="admin-column">
               <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Название" required />
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Описание" />
@@ -333,14 +416,47 @@ const TasksModule = (_: ModuleRuntimeProps) => {
               {formError ? <p className="form-error">{formError}</p> : null}
             </div>
             <div className="admin-modal-actions">
-              <button type="button" className="ghost-button" onClick={() => setIsCreateOpen(false)}>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => {
+                  setIsCreateOpen(false);
+                  setEditingTask(null);
+                }}
+              >
                 Отмена
               </button>
               <button type="submit" className="primary-button">
-                Создать
+                {editingTask ? "Сохранить" : "Создать"}
               </button>
             </div>
           </form>
+        </div>
+      ) : null}
+
+      {detailTask ? (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal">
+            <h3>Подробнее</h3>
+            <div className="admin-column">
+              <p><strong>Название:</strong> {detailTask.title}</p>
+              <p><strong>Описание:</strong> {detailTask.description || "—"}</p>
+              <p><strong>Создал:</strong> {detailTask.created_by_name}</p>
+              <p><strong>Исполнители:</strong> {detailTask.assignee_names.join(", ") || "—"}</p>
+              <p><strong>Проверяющий:</strong> {detailTask.verifier_name || "—"}</p>
+              <p><strong>Срок:</strong> {detailTask.due_date || "—"} {detailTask.due_time || ""}</p>
+              <p><strong>Повторение:</strong> {detailTask.is_recurring ? `${detailTask.recurrence_type ?? ""}, интервал ${detailTask.recurrence_interval ?? 1}` : "нет"}</p>
+              <p><strong>Статус:</strong> {detailTask.status}</p>
+              <p><strong>Создана:</strong> {detailTask.created_at}</p>
+              <p><strong>Завершена:</strong> {detailTask.completed_at || "—"}</p>
+              <p><strong>Подтверждена:</strong> {detailTask.verified_at || "—"}</p>
+            </div>
+            <div className="admin-modal-actions">
+              <button type="button" className="primary-button" onClick={() => setDetailTask(null)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

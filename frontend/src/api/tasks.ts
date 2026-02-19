@@ -9,13 +9,16 @@ export type TaskDto = {
   status: "active" | "done_pending_verify" | "done";
   priority: "normal" | "urgent" | "very_urgent" | null;
   verifier_user_id: number | null;
+  verifier_name: string | null;
   created_by_user_id: number;
+  created_by_name: string;
   created_at: string;
   completed_at: string | null;
   verified_at: string | null;
   source_type: string | null;
   source_id: string | null;
   assignee_user_ids: number[];
+  assignee_names: string[];
   is_overdue: boolean;
   is_recurring: boolean;
   recurrence_type: "daily" | "weekly" | "monthly" | "yearly" | null;
@@ -80,3 +83,14 @@ export const recurrenceAction = (
 
 export const getTaskById = (token: string, id: string) =>
   apiFetch<TaskDto>(`/tasks/${id}`, { method: "GET" }, token);
+
+export type TaskBadgesDto = {
+  pending_verify_count: number;
+  fresh_completed_flag: boolean;
+};
+
+export const getTaskBadges = (token: string) =>
+  apiFetch<TaskBadgesDto>("/tasks/badges", { method: "GET" }, token);
+
+export const deleteTask = (token: string, id: string) =>
+  apiFetch<void>(`/tasks/${id}`, { method: "DELETE" }, token);
