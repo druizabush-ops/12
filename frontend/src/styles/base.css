@@ -5,30 +5,47 @@
   color-scheme: light;
   --bg: #f5f6f8;
   --bg-secondary: #ffffff;
+  --bg-surface-2: #ffffff;
   --text-primary: #1f2937;
   --text-secondary: #6b7280;
   --border: #e5e7eb;
   --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.15);
   --accent-contrast: #ffffff;
+  --success: #2fbf71;
   --danger: #dc2626;
   --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0f172a;
-  --bg-secondary: #111827;
-  --text-primary: #f9fafb;
-  --text-secondary: #94a3b8;
-  --border: #1f2937;
-  --accent: #60a5fa;
-  --accent-contrast: #0f172a;
-  --danger: #f87171;
-  --shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
+  --bg: #0f0f0f;
+  --bg-secondary: #181818;
+  --bg-surface-2: #222222;
+
+  --text-primary: #f1f1f1;
+  --text-secondary: #a0a0a0;
+
+  --border: #2c2c2c;
+
+  --accent: #ff7a00;
+  --accent-hover: #ff8f1f;
+  --accent-soft: rgba(255, 122, 0, 0.15);
+  --accent-contrast: #ffffff;
+
+  --danger: #ff5f5f;
+
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
 }
 
 * {
   box-sizing: border-box;
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 body {
@@ -481,7 +498,9 @@ body {
 }
 
 .tasks-day.active {
-  border-color: var(--accent);
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tasks-list-header {
@@ -508,7 +527,7 @@ body {
 }
 
 .task-item.pending-verify {
-  border-color: #7c4dff;
+  border-color: var(--accent);
 }
 
 .task-item-main {
@@ -567,20 +586,16 @@ body {
   margin-bottom: 12px;
 }
 
-.tasks-day.active {
-  border: 2px solid #4ea8ff;
-}
-
 .task-item.done {
-  background: color-mix(in srgb, #2fbf71 16%, transparent);
-  border-color: color-mix(in srgb, #2fbf71 50%, var(--border));
+  background: color-mix(in srgb, var(--success) 16%, transparent);
+  border-color: color-mix(in srgb, var(--success) 50%, var(--border));
 }
 
 .task-due-time {
   margin-left: 8px;
   font-size: 14px;
   font-weight: 600;
-  background: color-mix(in srgb, #f5c74d 40%, transparent);
+  background: var(--accent-soft);
   border-radius: 6px;
   padding: 1px 8px;
 }
@@ -616,17 +631,17 @@ body {
 }
 
 .tasks-weekdays .weekend {
-  color: #9f6a00;
+  color: var(--accent);
 }
 
 .tasks-day.weekend {
-  background: color-mix(in srgb, #f5c74d 24%, transparent);
+  background: var(--accent-soft);
 }
 
 
 .task-badge-success {
-  border-color: #2fbf71;
-  color: #2fbf71;
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .task-picker-columns {
