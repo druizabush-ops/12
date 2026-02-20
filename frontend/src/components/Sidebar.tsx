@@ -59,22 +59,6 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           data-tooltip={isCollapsed ? "Развернуть" : "Свернуть"}
         >
           <span className="sidebar-icon">{isCollapsed ? "→" : "←"}</span>
-          <span className="sidebar-text">{isCollapsed ? "Развернуть" : "Свернуть"}</span>
-        </button>
-      </div>
-      <div className="sidebar-section">
-        <button
-          className="secondary-button"
-          type="button"
-          onClick={toggleTheme}
-          data-tooltip={theme === "light" ? "Темная тема" : "Светлая тема"}
-        >
-          <span className="sidebar-icon" aria-hidden="true">
-            🌓
-          </span>
-          <span className="sidebar-text">
-            {theme === "light" ? "Темная тема" : "Светлая тема"}
-          </span>
         </button>
       </div>
       <div className="sidebar-section">
@@ -91,7 +75,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
             <span className="sidebar-icon" aria-hidden="true">
               🧩
             </span>
-            <span className="modules-title sidebar-text">Модули</span>
+            <span className="modules-title sidebar-text">МОДУЛИ</span>
           </div>
           {isLoading ? (
             <p className="sidebar-text">Загрузка модулей...</p>
@@ -161,14 +145,47 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
         </div>
       </div>
       <div className="sidebar-section">
-        <div className="sidebar-contact" data-tooltip="Телефон руководителя">
-          <span className="phone sidebar-text">+79991215130</span>
-          <a href="https://t.me/79991215130" target="_blank" rel="noreferrer" className="telegram-link">
-            <span className="sidebar-text">Написать в Telegram</span>
-          </a>
+        <div className="sidebar-contacts">
+          <div className="contacts-title sidebar-text">КОНТАКТЫ</div>
+
+          <div className="contact-item">
+            <div className="contact-label sidebar-text">Магазин</div>
+            <div className="sidebar-text">8 831 93 51816</div>
+          </div>
+
+          <div className="contact-item">
+            <div className="contact-label sidebar-text">Бухгалтерия</div>
+            <div className="sidebar-text">8 831 93 52558</div>
+          </div>
+
+          <div className="contact-item">
+            <div className="contact-label sidebar-text">Руководитель отдела</div>
+            <div className="sidebar-text">+79087319582 Светлана Зудихина</div>
+          </div>
+
+          <div className="contact-item">
+            <div className="contact-label sidebar-text">Техподдержка</div>
+            <div className="sidebar-text">+79991215130 Николай</div>
+          </div>
+
+          <div className="contact-item">
+            <a href="https://t.me/ndmaksimov" target="_blank" rel="noreferrer" className="telegram-link">
+              <span className="sidebar-text">https://t.me/ndmaksimov</span>
+            </a>
+          </div>
         </div>
       </div>
       <div className="sidebar-footer">
+        <button
+          className="theme-icon-only"
+          type="button"
+          onClick={toggleTheme}
+          data-tooltip={theme === "light" ? "Темная тема" : "Светлая тема"}
+        >
+          <span className="sidebar-icon" aria-hidden="true">
+            🌓
+          </span>
+        </button>
         <button className="primary-button" type="button" onClick={logout} data-tooltip="Выйти">
           <span className="sidebar-icon" aria-hidden="true">
             🚪
