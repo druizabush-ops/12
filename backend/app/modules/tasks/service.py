@@ -122,7 +122,7 @@ def _is_task_verifier(db: Session, task_id: str, user_id: int) -> bool:
 
 
 def _can_edit(db: Session, task: Task, user_id: int) -> bool:
-    return task.created_by_user_id == user_id or _is_task_verifier(db, task.id, user_id) or user_can_manage_access(db, user_id)
+    return task.created_by_user_id == user_id or user_can_manage_access(db, user_id)
 
 
 def _can_delete(db: Session, task: Task, user_id: int) -> bool:
@@ -198,7 +198,7 @@ def list_tasks_for_date(db: Session, current_user_id: int, selected_date: date, 
 
     active_query = select(Task).where(
         Task.due_date == selected_date,
-        Task.status == ACTIVE_STATUS,
+        Task.status.in_([ACTIVE_STATUS, PENDING_VERIFY_STATUS]),
         Task.is_hidden.is_(False),
         tab_filter,
         or_(

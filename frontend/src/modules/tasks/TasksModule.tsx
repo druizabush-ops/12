@@ -136,6 +136,9 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     if (taskTab === "assigned") {
       return visibleTasks.filter((task) => !task.is_overdue && (task.status === "active" || task.status === "done_pending_verify"));
     }
+    if (taskTab === "verify") {
+      return visibleTasks.filter((task) => !task.is_overdue && (task.status === "active" || task.status === "done_pending_verify"));
+    }
     return visibleTasks.filter((task) => !task.is_overdue && task.status === "active");
   }, [visibleTasks, taskTab]);
 
