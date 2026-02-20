@@ -2,7 +2,7 @@
 // Компонент изолирует логику сайдбара от остального layout.
 
 import { useNavigate } from "react-router-dom";
-import { APP_NAME, MANAGER_PHONE } from "../config/appConfig";
+import { APP_NAME } from "../config/appConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useModules } from "../hooks/useModules";
@@ -63,15 +63,6 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
         </button>
       </div>
       <div className="sidebar-section">
-        <div className="user-card" data-tooltip="Пользователь">
-          <span className="sidebar-icon" aria-hidden="true">
-            👤
-          </span>
-          <span className="user-label sidebar-text">Пользователь</span>
-          <strong className="sidebar-text">{user ? user.username : "Загрузка..."}</strong>
-        </div>
-      </div>
-      <div className="sidebar-section">
         <button
           className="secondary-button"
           type="button"
@@ -87,12 +78,11 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
         </button>
       </div>
       <div className="sidebar-section">
-        <div className="support-card" data-tooltip="Телефон руководителя">
+        <div className="sidebar-user-row" data-tooltip="Пользователь">
           <span className="sidebar-icon" aria-hidden="true">
-            📞
+            👤
           </span>
-          <span className="support-label sidebar-text">Телефон руководителя</span>
-          <strong className="sidebar-text">{MANAGER_PHONE}</strong>
+          <strong className="sidebar-text user-name">{user ? user.username : "Загрузка..."}</strong>
         </div>
       </div>
       <div className="sidebar-section">
@@ -117,21 +107,17 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           ) : (
             <ul className="sidebar-text">
               {visibleModules.map((moduleItem, index) => (
-                <li key={moduleItem.id}>
-                  <div>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => navigate(`/app/modules/${moduleItem.path}`)}
-                      data-tooltip={`Перейти: ${moduleItem.title}`}
-                    >
-                      <span className="sidebar-text">{moduleItem.title}</span>
-                    </button>
-                    {moduleItem.is_primary ? (
-                      <span className="sidebar-text"> (основной)</span>
-                    ) : null}
-                  </div>
-                  <div>
+                <li key={moduleItem.id} className="module-row">
+                  <button
+                    className="ghost-button module-name"
+                    type="button"
+                    onClick={() => navigate(`/app/modules/${moduleItem.path}`)}
+                    data-tooltip={`Перейти: ${moduleItem.title}`}
+                  >
+                    <span className="sidebar-text">{moduleItem.title}</span>
+                    {moduleItem.is_primary ? <span className="sidebar-text">(основной)</span> : null}
+                  </button>
+                  <div className="module-actions">
                     <button
                       className="ghost-button"
                       type="button"
@@ -172,6 +158,14 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
               ))}
             </ul>
           )}
+        </div>
+      </div>
+      <div className="sidebar-section">
+        <div className="sidebar-contact" data-tooltip="Телефон руководителя">
+          <span className="phone sidebar-text">+79991215130</span>
+          <a href="https://t.me/79991215130" target="_blank" rel="noreferrer" className="telegram-link">
+            <span className="sidebar-text">Написать в Telegram</span>
+          </a>
         </div>
       </div>
       <div className="sidebar-footer">
