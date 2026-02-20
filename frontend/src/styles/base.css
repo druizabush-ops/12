@@ -147,6 +147,11 @@ body {
   border-left: 3px solid var(--accent);
 }
 
+.module-row.active {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+
 .module-row.editing {
   cursor: grab;
 }
@@ -160,6 +165,10 @@ body {
 .module-name {
   justify-content: flex-start;
   flex: 1;
+}
+
+.module-short-title {
+  display: none;
 }
 
 .module-handle {
@@ -296,6 +305,15 @@ body {
 
 .app-shell.collapsed .sidebar .module-row {
   justify-content: center;
+}
+
+.app-shell.collapsed .sidebar .module-name {
+  justify-content: center;
+}
+
+.app-shell.collapsed .sidebar .module-short-title {
+  display: inline;
+  font-weight: 600;
 }
 
 .app-shell.collapsed .sidebar .primary-button,
