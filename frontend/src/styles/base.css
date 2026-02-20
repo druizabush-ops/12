@@ -507,6 +507,14 @@ body {
   gap: 12px;
 }
 
+.task-item.pending-verify {
+  border-color: #7c4dff;
+}
+
+.task-item-main {
+  min-width: 0;
+}
+
 .task-item.overdue {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
@@ -533,6 +541,21 @@ body {
 .task-actions {
   display: flex;
   gap: 8px;
+}
+
+.task-actions-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-actions-inline button {
+  width: 34px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
 }
 
 .tasks-attention {
@@ -610,6 +633,35 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.task-datetime-row {
+  display: flex;
+  gap: 10px;
+}
+
+.task-datetime-row input {
+  width: auto;
+}
+
+.task-recurring-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-recurring-box {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.task-weekdays-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .task-user-list {
