@@ -1,9 +1,6 @@
-// Хук хранит состояние реестра модулей BLOCK 13 как платформенный слой.
-// UI модулей не реализуется, backend остаётся источником истины, поэтому запросы централизованы.
-// Логика вынесена сюда, чтобы Sidebar оставался тонким UI-слоем без сетевых деталей.
-
 import { useCallback, useEffect, useState } from "react";
-import { fetchModules, updateModulesOrder, updatePrimaryModule } from "../api/modules";
+import { fetchModules } from "../api/modules";
+import { fetchSidebarSettings, saveSidebarModulesOrder } from "../api/sidebarSettings";
 import { useAuth } from "../contexts/AuthContext";
 import { PlatformModule } from "../types/module";
 
@@ -13,8 +10,32 @@ type UseModulesState = {
   error: string | null;
   pendingActionId: string | null;
   reload: () => Promise<void>;
-  setPrimary: (moduleId: string | null) => Promise<void>;
   reorder: (orderedIds: string[]) => Promise<void>;
+};
+
+const applyModulesOrder = (allModules: PlatformModule[], modulesOrder: string[] | null): PlatformModule[] => {
+  if (!modulesOrder || modulesOrder.length === 0) {
+    return allModules;
+  }
+
+  const modulesById = new Map(allModules.map((module) => [module.id, module]));
+  const orderedModules: PlatformModule[] = [];
+
+  modulesOrder.forEach((moduleId) => {
+    const module = modulesById.get(moduleId);
+    if (module) {
+      orderedModules.push(module);
+      modulesById.delete(moduleId);
+    }
+  });
+
+  allModules.forEach((module) => {
+    if (modulesById.has(module.id)) {
+      orderedModules.push(module);
+    }
+  });
+
+  return orderedModules;
 };
 
 export const useModules = (): UseModulesState => {
@@ -33,8 +54,11 @@ export const useModules = (): UseModulesState => {
     setError(null);
 
     try {
-      const data = await fetchModules(token);
-      setModules(data);
+      const [modulesData, modulesOrder] = await Promise.all([
+        fetchModules(token),
+        fetchSidebarSettings(token),
+      ]);
+      setModules(applyModulesOrder(modulesData, modulesOrder));
     } catch (err) {
       console.error("Ошибка загрузки модулей", err);
       setError("Не удалось загрузить модули");
@@ -54,28 +78,6 @@ export const useModules = (): UseModulesState => {
     }
   }, [token]);
 
-  const setPrimary = useCallback(
-    async (moduleId: string | null) => {
-      if (!token) {
-        return;
-      }
-
-      setPendingActionId(moduleId ?? "primary-reset");
-      setError(null);
-
-      try {
-        const data = await updatePrimaryModule(token, moduleId);
-        setModules(data);
-      } catch (err) {
-        console.error("Ошибка обновления основного модуля", err);
-        setError("Не удалось обновить основной модуль");
-      } finally {
-        setPendingActionId(null);
-      }
-    },
-    [token]
-  );
-
   const reorder = useCallback(
     async (orderedIds: string[]) => {
       if (!token) {
@@ -86,17 +88,14 @@ export const useModules = (): UseModulesState => {
       const optimisticModules = orderedIds
         .map((id) => previousModules.find((module) => module.id === id))
         .filter((module): module is PlatformModule => Boolean(module));
-
-      if (optimisticModules.length === previousModules.length) {
-        setModules(optimisticModules);
-      }
+      const remainingModules = previousModules.filter((module) => !orderedIds.includes(module.id));
+      setModules([...optimisticModules, ...remainingModules]);
 
       setPendingActionId("reorder");
       setError(null);
 
       try {
-        const data = await updateModulesOrder(token, orderedIds);
-        setModules(data);
+        await saveSidebarModulesOrder(token, orderedIds);
       } catch (err) {
         console.error("Ошибка сохранения порядка модулей", err);
         setError("Не удалось сохранить порядок модулей");
@@ -114,7 +113,6 @@ export const useModules = (): UseModulesState => {
     error,
     pendingActionId,
     reload,
-    setPrimary,
     reorder,
   };
 };

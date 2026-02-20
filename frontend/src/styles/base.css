@@ -123,7 +123,7 @@ body {
   letter-spacing: 0.04em;
 }
 
-.modules ul {
+.module-list {
   list-style: none;
   padding: 0;
   margin: 10px 0 0;
@@ -136,18 +136,43 @@ body {
 
 .module-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 10px;
+  border-radius: 10px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.module-row.pinned {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+}
+
+.module-row.editing {
+  cursor: grab;
+}
+
+.module-row.dragging {
+  transform: scale(1.02);
+  box-shadow: var(--shadow);
+  z-index: 2;
 }
 
 .module-name {
   justify-content: flex-start;
+  flex: 1;
 }
 
-.module-actions {
-  display: flex;
-  gap: 6px;
+.module-handle {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 18px;
+  cursor: grab;
+  padding: 4px 8px;
+}
+
+.module-handle:active {
+  cursor: grabbing;
 }
 
 .telegram-link {
@@ -160,6 +185,10 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.modules-header .modules-title {
+  flex: 1;
 }
 
 .sidebar-section {
@@ -265,8 +294,7 @@ body {
   text-align: center;
 }
 
-.app-shell.collapsed .sidebar .module-row,
-.app-shell.collapsed .sidebar .module-actions {
+.app-shell.collapsed .sidebar .module-row {
   justify-content: center;
 }
 
