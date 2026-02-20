@@ -1,48 +1,99 @@
-// Файл отвечает за боковую панель, чтобы навигация и профиль были всегда под рукой.
-// Компонент изолирует логику сайдбара от остального layout.
-
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { APP_NAME } from "../config/appConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import { useModules } from "../hooks/useModules";
+import { PlatformModule } from "../types/module";
 
 type SidebarProps = {
   isCollapsed: boolean;
   onToggle: () => void;
 };
 
+type SortableModuleRowProps = {
+  moduleItem: PlatformModule;
+  isPinned: boolean;
+  isEditingModules: boolean;
+  onNavigate: (modulePath: string) => void;
+};
+
+const SortableModuleRow = ({
+  moduleItem,
+  isPinned,
+  isEditingModules,
+  onNavigate,
+}: SortableModuleRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: moduleItem.id,
+    disabled: !isEditingModules,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`module-row ${isPinned ? "pinned" : ""} ${isEditingModules ? "editing" : ""} ${
+        isDragging ? "dragging" : ""
+      }`}
+    >
+      {isEditingModules ? (
+        <button className="module-handle" type="button" aria-label="Переместить модуль" {...attributes} {...listeners}>
+          ≡
+        </button>
+      ) : null}
+      <button
+        className="ghost-button module-name"
+        type="button"
+        onClick={() => {
+          if (!isEditingModules) {
+            onNavigate(moduleItem.path);
+          }
+        }}
+        data-tooltip={isEditingModules ? undefined : `Перейти: ${moduleItem.title}`}
+      >
+        <span className="sidebar-text">{moduleItem.title}</span>
+      </button>
+    </li>
+  );
+};
+
 const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
-  const { modules, isLoading, error, pendingActionId, reload, setPrimary, reorder } = useModules();
+  const { modules, isLoading, error, pendingActionId, reload, reorder } = useModules();
+  const [isEditingModules, setIsEditingModules] = useState(false);
 
-  const isPending = pendingActionId !== null;
-  const visibleModules = modules.filter((moduleItem) => moduleItem.has_access);
-  const canReorder = modules.length === visibleModules.length;
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const visibleModules = useMemo(() => modules.filter((moduleItem) => moduleItem.has_access), [modules]);
 
-  const handleMove = (moduleId: string, direction: "up" | "down") => {
-    if (!canReorder) {
+  const handleDragEnd = async ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
+    if (!over || active.id === over.id) {
       return;
     }
 
-    const currentIndex = visibleModules.findIndex((moduleItem) => moduleItem.id === moduleId);
-    if (currentIndex === -1) {
+    const oldIndex = visibleModules.findIndex((moduleItem) => moduleItem.id === active.id);
+    const newIndex = visibleModules.findIndex((moduleItem) => moduleItem.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) {
       return;
     }
 
-    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= visibleModules.length) {
-      return;
-    }
-
-    const nextOrder = [...visibleModules];
-    [nextOrder[currentIndex], nextOrder[targetIndex]] = [
-      nextOrder[targetIndex],
-      nextOrder[currentIndex],
-    ];
-    void reorder(nextOrder.map((moduleItem) => moduleItem.id));
+    const nextOrder = arrayMove(visibleModules, oldIndex, newIndex).map((moduleItem) => moduleItem.id);
+    await reorder(nextOrder);
   };
 
   return (
@@ -76,6 +127,17 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
               🧩
             </span>
             <span className="modules-title sidebar-text">МОДУЛИ</span>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setIsEditingModules((prev) => !prev)}
+              disabled={pendingActionId === "reorder"}
+              data-tooltip={isEditingModules ? "Завершить редактирование" : "Редактировать порядок"}
+            >
+              <span className="sidebar-icon" aria-hidden="true">
+                ✎
+              </span>
+            </button>
           </div>
           {isLoading ? (
             <p className="sidebar-text">Загрузка модулей...</p>
@@ -89,58 +151,21 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           ) : visibleModules.length === 0 ? (
             <p className="sidebar-text">Нет доступных модулей</p>
           ) : (
-            <ul className="sidebar-text">
-              {visibleModules.map((moduleItem, index) => (
-                <li key={moduleItem.id} className="module-row">
-                  <button
-                    className="ghost-button module-name"
-                    type="button"
-                    onClick={() => navigate(`/app/modules/${moduleItem.path}`)}
-                    data-tooltip={`Перейти: ${moduleItem.title}`}
-                  >
-                    <span className="sidebar-text">{moduleItem.title}</span>
-                    {moduleItem.is_primary ? <span className="sidebar-text">(основной)</span> : null}
-                  </button>
-                  <div className="module-actions">
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => setPrimary(moduleItem.is_primary ? null : moduleItem.id)}
-                      disabled={isPending}
-                      data-tooltip={
-                        moduleItem.is_primary ? "Снять основной модуль" : "Сделать основным"
-                      }
-                    >
-                      <span className="sidebar-icon" aria-hidden="true">
-                        ⭐
-                      </span>
-                    </button>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => handleMove(moduleItem.id, "up")}
-                      disabled={isPending || !canReorder || index === 0}
-                      data-tooltip="Поднять выше"
-                    >
-                      <span className="sidebar-icon" aria-hidden="true">
-                        ↑
-                      </span>
-                    </button>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => handleMove(moduleItem.id, "down")}
-                      disabled={isPending || !canReorder || index === visibleModules.length - 1}
-                      data-tooltip="Опустить ниже"
-                    >
-                      <span className="sidebar-icon" aria-hidden="true">
-                        ↓
-                      </span>
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={visibleModules.map((moduleItem) => moduleItem.id)} strategy={verticalListSortingStrategy}>
+                <ul className="sidebar-text module-list">
+                  {visibleModules.map((moduleItem, index) => (
+                    <SortableModuleRow
+                      key={moduleItem.id}
+                      moduleItem={moduleItem}
+                      isPinned={index === 0}
+                      isEditingModules={isEditingModules}
+                      onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
+                    />
+                  ))}
+                </ul>
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>

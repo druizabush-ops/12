@@ -5,6 +5,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
 import { ModuleContainer } from "./components/ModuleContainer";
 import HelpPage from "./pages/HelpPage";
+import AppHomePage from "./pages/AppHomePage";
 import LoginPage from "./pages/LoginPage";
 import RequireAuth from "./routes/RequireAuth";
 import SmartRedirect from "./routes/SmartRedirect";
@@ -21,7 +22,7 @@ const App = () => (
         </RequireAuth>
       }
     >
-      <Route index element={<HelpPage />} />
+      <Route index element={<AppHomePage />} />
       <Route path="help" element={<HelpPage />} />
       <Route path="modules/:modulePath" element={<ModuleContainer />} />
     </Route>
