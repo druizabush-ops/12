@@ -133,11 +133,20 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   }, [tasks, taskTab]);
 
   const activeTasks = useMemo(() => {
-    if (taskTab === "assigned") {
-      return visibleTasks.filter((task) => !task.is_overdue && (task.status === "active" || task.status === "done_pending_verify"));
-    }
-    return visibleTasks.filter((task) => !task.is_overdue && task.status === "active");
-  }, [visibleTasks, taskTab]);
+    const me = user?.id ?? 0;
+
+    return visibleTasks.filter((task) => {
+      if (task.status === "active" && !task.is_overdue) {
+        return true;
+      }
+
+      if (task.status === "done_pending_verify" && (taskTab === "verify" || task.assignee_user_ids.includes(me))) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [visibleTasks, taskTab, user]);
 
   const overdueTasks = useMemo(() => visibleTasks.filter((task) => task.is_overdue && task.status !== "done"), [visibleTasks]);
   const doneTasks = useMemo(() => visibleTasks.filter((task) => task.status === "done"), [visibleTasks]);

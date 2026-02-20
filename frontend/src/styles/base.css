@@ -508,7 +508,7 @@ body {
 }
 
 .task-item.pending-verify {
-  border-color: #7c4dff;
+  border-left: 4px solid #7b3fe4;
 }
 
 .task-item-main {
