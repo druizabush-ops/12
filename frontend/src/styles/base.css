@@ -172,6 +172,10 @@ body {
   flex: 1;
 }
 
+.module-short-title {
+  display: none;
+}
+
 .module-handle {
   border: none;
   background: transparent;
@@ -306,6 +310,15 @@ body {
 
 .app-shell.collapsed .sidebar .module-row {
   justify-content: center;
+}
+
+.app-shell.collapsed .sidebar .module-name {
+  justify-content: center;
+}
+
+.app-shell.collapsed .sidebar .module-short-title {
+  display: inline;
+  font-weight: 600;
 }
 
 .app-shell.collapsed .sidebar .primary-button,

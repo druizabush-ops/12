@@ -68,6 +68,7 @@ const SortableModuleRow = ({
         data-tooltip={isEditingModules ? undefined : `Перейти: ${moduleItem.title}`}
       >
         <span className="sidebar-text">{moduleItem.title}</span>
+        {isCollapsed ? <span className="module-short-title">{moduleItem.title.charAt(0)}</span> : null}
       </button>
     </li>
   );
@@ -76,6 +77,7 @@ const SortableModuleRow = ({
 const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
   const navigate = useNavigate();
   const location = useLocation();
   const { modules, isLoading, error, pendingActionId, reload, reorder } = useModules();
