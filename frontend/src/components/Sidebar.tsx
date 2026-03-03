@@ -23,7 +23,6 @@ type SortableModuleRowProps = {
   moduleItem: PlatformModule;
   isPinned: boolean;
   isActive: boolean;
-  isCollapsed: boolean;
   isEditingModules: boolean;
   onNavigate: (modulePath: string) => void;
 };
@@ -32,7 +31,6 @@ const SortableModuleRow = ({
   moduleItem,
   isPinned,
   isActive,
-  isCollapsed,
   isEditingModules,
   onNavigate,
 }: SortableModuleRowProps) => {
@@ -81,6 +79,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { modules, isLoading, error, pendingActionId, reload, reorder } = useModules();
   const [isEditingModules, setIsEditingModules] = useState(false);
 
@@ -115,103 +114,100 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           className="ghost-button"
           type="button"
           onClick={onToggle}
-          data-tooltip={isCollapsed ? undefined : "Свернуть"}
         >
           <span className="sidebar-icon">{isCollapsed ? "→" : "←"}</span>
         </button>
       </div>
-      <div className="sidebar-section">
-        {!isCollapsed ? (
-          <div className="sidebar-user-row" data-tooltip="Пользователь">
-            <span className="sidebar-icon" aria-hidden="true">
-              👤
-            </span>
-            <strong className="sidebar-text user-name">{user ? user.username : "Загрузка..."}</strong>
-          </div>
-        ) : null}
-      </div>
-      <div className="sidebar-section">
-        <div className="modules" data-tooltip="Модули">
-          <div className="modules-header">
-            <span className="sidebar-icon" aria-hidden="true">
-              🧩
-            </span>
-            {!isCollapsed ? <span className="modules-title sidebar-text">МОДУЛИ</span> : null}
-            <button
-              className="ghost-button"
-              type="button"
-              onClick={() => setIsEditingModules((prev) => !prev)}
-              disabled={pendingActionId === "reorder"}
-              data-tooltip={isEditingModules ? "Завершить редактирование" : "Редактировать порядок"}
-            >
+      {!isCollapsed ? (
+        <>
+          <div className="sidebar-section">
+            <div className="sidebar-user-row" data-tooltip="Пользователь">
               <span className="sidebar-icon" aria-hidden="true">
-                ✎
+                👤
               </span>
-            </button>
-          </div>
-          {isLoading ? (
-            <p className="sidebar-text">Загрузка модулей...</p>
-          ) : error ? (
-            <div className="sidebar-text">
-              <p>{error}</p>
-              <button className="ghost-button" type="button" onClick={reload}>
-                Повторить
-              </button>
+              <strong className="sidebar-text user-name">{user ? user.username : "Загрузка..."}</strong>
             </div>
-          ) : visibleModules.length === 0 ? (
-            <p className="sidebar-text">Нет доступных модулей</p>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={visibleModules.map((moduleItem) => moduleItem.id)} strategy={verticalListSortingStrategy}>
-                <ul className="module-list">
-                  {visibleModules.map((moduleItem, index) => (
-                    <SortableModuleRow
-                      key={moduleItem.id}
-                      moduleItem={moduleItem}
-                      isPinned={index === 0}
-                      isActive={location.pathname === `/app/modules/${moduleItem.path}`}
-                      isCollapsed={isCollapsed}
-                      isEditingModules={isEditingModules}
-                      onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
-                    />
-                  ))}
-                </ul>
-              </SortableContext>
-            </DndContext>
-          )}
-        </div>
-      </div>
-      <div className="sidebar-section">
-        <div className="sidebar-contacts">
-          <div className="contacts-title sidebar-text">КОНТАКТЫ</div>
-
-          <div className="contact-item">
-            <div className="contact-label sidebar-text">Магазин</div>
-            <div className="sidebar-text">8 831 93 51816</div>
           </div>
-
-          <div className="contact-item">
-            <div className="contact-label sidebar-text">Бухгалтерия</div>
-            <div className="sidebar-text">8 831 93 52558</div>
+          <div className="sidebar-section">
+            <div className="modules" data-tooltip="Модули">
+              <div className="modules-header">
+                <span className="modules-title sidebar-text">МОДУЛИ</span>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => setIsEditingModules((prev) => !prev)}
+                  disabled={pendingActionId === "reorder"}
+                  data-tooltip={isEditingModules ? "Завершить редактирование" : "Редактировать порядок"}
+                >
+                  <span className="sidebar-icon" aria-hidden="true">
+                    ✎
+                  </span>
+                </button>
+              </div>
+              {isLoading ? (
+                <p className="sidebar-text">Загрузка модулей...</p>
+              ) : error ? (
+                <div className="sidebar-text">
+                  <p>{error}</p>
+                  <button className="ghost-button" type="button" onClick={reload}>
+                    Повторить
+                  </button>
+                </div>
+              ) : visibleModules.length === 0 ? (
+                <p className="sidebar-text">Нет доступных модулей</p>
+              ) : (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={visibleModules.map((moduleItem) => moduleItem.id)} strategy={verticalListSortingStrategy}>
+                    <ul className="sidebar-text module-list">
+                      {visibleModules.map((moduleItem, index) => (
+                        <SortableModuleRow
+                          key={moduleItem.id}
+                          moduleItem={moduleItem}
+                          isPinned={index === 0}
+                          isActive={location.pathname.startsWith(`/app/modules/${moduleItem.path}`)}
+                          isEditingModules={isEditingModules}
+                          onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
+                        />
+                      ))}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
+              )}
+            </div>
           </div>
+          <div className="sidebar-section">
+            <div className="sidebar-contacts">
+              <div className="contacts-title sidebar-text">КОНТАКТЫ</div>
 
-          <div className="contact-item">
-            <div className="contact-label sidebar-text">Руководитель отдела</div>
-            <div className="sidebar-text">+79087319582 Светлана Зудихина</div>
-          </div>
+              <div className="contact-item">
+                <div className="contact-label sidebar-text">Магазин</div>
+                <div className="sidebar-text">8 831 93 51816</div>
+              </div>
 
-          <div className="contact-item">
-            <div className="contact-label sidebar-text">Техподдержка</div>
-            <div className="sidebar-text">+79991215130 Николай</div>
-          </div>
+              <div className="contact-item">
+                <div className="contact-label sidebar-text">Бухгалтерия</div>
+                <div className="sidebar-text">8 831 93 52558</div>
+              </div>
 
-          <div className="contact-item">
-            <a href="https://t.me/ndmaksimov" target="_blank" rel="noreferrer" className="telegram-link">
-              <span className="sidebar-text">https://t.me/ndmaksimov</span>
-            </a>
+              <div className="contact-item">
+                <div className="contact-label sidebar-text">Руководитель отдела</div>
+                <div className="sidebar-text">+79087319582 Светлана Зудихина</div>
+              </div>
+
+              <div className="contact-item">
+                <div className="contact-label sidebar-text">Техподдержка</div>
+                <div className="sidebar-text">+79991215130 Николай</div>
+              </div>
+
+              <div className="contact-item">
+                <a href="https://t.me/ndmaksimov" target="_blank" rel="noreferrer" className="telegram-link">
+                  <span className="sidebar-text">https://t.me/ndmaksimov</span>
+                </a>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      ) : null}
       <div className="sidebar-footer">
         <button
           className="theme-icon-only"

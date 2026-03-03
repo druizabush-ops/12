@@ -148,8 +148,13 @@ body {
 }
 
 .module-row.active {
-  background: var(--accent-soft);
-  border-left: 3px solid var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+}
+
+.module-row.active.pinned {
+  border: 2px solid var(--accent);
 }
 
 .module-row.editing {
