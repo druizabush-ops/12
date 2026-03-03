@@ -3,6 +3,7 @@ import React from "react";
 import HelpModule from "./help";
 import AdminModule from "./admin";
 import TasksModule from "./tasks";
+import CounterpartiesModule from "./counterparties";
 import { ModuleRuntimeProps } from "../types/module";
 
 // BLOCK 18 registration rule:
@@ -13,4 +14,5 @@ export const moduleRegistry: Record<string, React.ComponentType<ModuleRuntimePro
   help: HelpModule,
   admin: AdminModule,
   tasks: TasksModule,
+  counterparties: CounterpartiesModule,
 };

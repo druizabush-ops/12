@@ -16,6 +16,7 @@ from app.modules.module_registry import models as module_registry_models  # noqa
 from app.events import models as event_models  # noqa: F401
 from app.modules.tasks import models as tasks_models  # noqa: F401
 from app.modules.user_sidebar_settings import models as user_sidebar_settings_models  # noqa: F401
+from app.modules.counterparties import models as counterparties_models  # noqa: F401
 
 config = context.config
 

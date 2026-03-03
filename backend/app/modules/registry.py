@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.modules.base import Module
 from app.modules.auth import router as auth_router
 from app.modules.admin_access import router as admin_access_router
+from app.modules.counterparties import router as counterparties_router
 from app.modules.dummy.manifest import module as dummy_module
 from app.modules.module_registry.api import router as module_registry_router
 from app.modules.tasks import router as tasks_router
@@ -18,6 +19,7 @@ modules: list[Module] = [
     Module(name="admin_access", router=admin_access_router),
     Module(name="module_registry", router=module_registry_router),
     Module(name="tasks", router=tasks_router),
+    Module(name="counterparties", router=counterparties_router),
     Module(name="user_sidebar_settings", router=user_sidebar_settings_router),
     dummy_module,
 ]

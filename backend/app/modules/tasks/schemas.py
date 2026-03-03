@@ -44,6 +44,9 @@ class TaskCreatePayload(BaseModel):
     assignee_user_ids: list[int] = Field(default_factory=list)
     source_type: str | None = None
     source_id: str | None = None
+    source_module: str | None = None
+    source_counterparty_id: int | None = None
+    source_trigger_id: int | None = None
     is_recurring: bool = False
     recurrence_type: RecurrenceType | None = None
     recurrence_interval: int | None = None
@@ -85,6 +88,9 @@ class TaskDto(BaseModel):
     verified_at: datetime | None
     source_type: str | None
     source_id: str | None
+    source_module: str | None
+    source_counterparty_id: int | None
+    source_trigger_id: int | None
     assignee_user_ids: list[int] = Field(default_factory=list)
     is_overdue: bool
     is_recurring: bool
