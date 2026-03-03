@@ -7,7 +7,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { APP_NAME } from "../config/appConfig";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
@@ -22,6 +22,8 @@ type SidebarProps = {
 type SortableModuleRowProps = {
   moduleItem: PlatformModule;
   isPinned: boolean;
+  isActive: boolean;
+  isCollapsed: boolean;
   isEditingModules: boolean;
   onNavigate: (modulePath: string) => void;
 };
@@ -29,6 +31,8 @@ type SortableModuleRowProps = {
 const SortableModuleRow = ({
   moduleItem,
   isPinned,
+  isActive,
+  isCollapsed,
   isEditingModules,
   onNavigate,
 }: SortableModuleRowProps) => {
@@ -46,7 +50,7 @@ const SortableModuleRow = ({
     <li
       ref={setNodeRef}
       style={style}
-      className={`module-row ${isPinned ? "pinned" : ""} ${isEditingModules ? "editing" : ""} ${
+      className={`module-row ${isPinned ? "pinned" : ""} ${isActive ? "active" : ""} ${isEditingModules ? "editing" : ""} ${
         isDragging ? "dragging" : ""
       }`}
     >
@@ -66,6 +70,7 @@ const SortableModuleRow = ({
         data-tooltip={isEditingModules ? undefined : `Перейти: ${moduleItem.title}`}
       >
         <span className="sidebar-text">{moduleItem.title}</span>
+        {isCollapsed ? <span className="module-short-title">{moduleItem.title.charAt(0)}</span> : null}
       </button>
     </li>
   );
@@ -74,6 +79,7 @@ const SortableModuleRow = ({
 const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
   const navigate = useNavigate();
   const { modules, isLoading, error, pendingActionId, reload, reorder } = useModules();
   const [isEditingModules, setIsEditingModules] = useState(false);
@@ -99,26 +105,30 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="brand" data-tooltip="Новый Дом">
-          <span className="brand-logo">🏢</span>
-          <span className="brand-name sidebar-text">{APP_NAME}</span>
-        </div>
+        {!isCollapsed ? (
+          <div className="brand" data-tooltip="Новый Дом">
+            <span className="brand-logo">🏢</span>
+            <span className="brand-name sidebar-text">{APP_NAME}</span>
+          </div>
+        ) : null}
         <button
           className="ghost-button"
           type="button"
           onClick={onToggle}
-          data-tooltip={isCollapsed ? "Развернуть" : "Свернуть"}
+          data-tooltip={isCollapsed ? undefined : "Свернуть"}
         >
           <span className="sidebar-icon">{isCollapsed ? "→" : "←"}</span>
         </button>
       </div>
       <div className="sidebar-section">
-        <div className="sidebar-user-row" data-tooltip="Пользователь">
-          <span className="sidebar-icon" aria-hidden="true">
-            👤
-          </span>
-          <strong className="sidebar-text user-name">{user ? user.username : "Загрузка..."}</strong>
-        </div>
+        {!isCollapsed ? (
+          <div className="sidebar-user-row" data-tooltip="Пользователь">
+            <span className="sidebar-icon" aria-hidden="true">
+              👤
+            </span>
+            <strong className="sidebar-text user-name">{user ? user.username : "Загрузка..."}</strong>
+          </div>
+        ) : null}
       </div>
       <div className="sidebar-section">
         <div className="modules" data-tooltip="Модули">
@@ -126,7 +136,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
             <span className="sidebar-icon" aria-hidden="true">
               🧩
             </span>
-            <span className="modules-title sidebar-text">МОДУЛИ</span>
+            {!isCollapsed ? <span className="modules-title sidebar-text">МОДУЛИ</span> : null}
             <button
               className="ghost-button"
               type="button"
@@ -153,12 +163,14 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={visibleModules.map((moduleItem) => moduleItem.id)} strategy={verticalListSortingStrategy}>
-                <ul className="sidebar-text module-list">
+                <ul className="module-list">
                   {visibleModules.map((moduleItem, index) => (
                     <SortableModuleRow
                       key={moduleItem.id}
                       moduleItem={moduleItem}
                       isPinned={index === 0}
+                      isActive={location.pathname === `/app/modules/${moduleItem.path}`}
+                      isCollapsed={isCollapsed}
                       isEditingModules={isEditingModules}
                       onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
                     />
