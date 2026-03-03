@@ -23,6 +23,7 @@ type SortableModuleRowProps = {
   moduleItem: PlatformModule;
   isPinned: boolean;
   isActive: boolean;
+  isCollapsed: boolean;
   isEditingModules: boolean;
   onNavigate: (modulePath: string) => void;
 };
@@ -33,6 +34,7 @@ const SortableModuleRow = ({
   isActive,
   isEditingModules,
   onNavigate,
+  isCollapsed,
 }: SortableModuleRowProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: moduleItem.id,
@@ -79,7 +81,6 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const location = useLocation();
   const { modules, isLoading, error, pendingActionId, reload, reorder } = useModules();
   const [isEditingModules, setIsEditingModules] = useState(false);
 
@@ -167,6 +168,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
                           isActive={location.pathname.startsWith(`/app/modules/${moduleItem.path}`)}
                           isEditingModules={isEditingModules}
                           onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
+						  isCollapsed={isCollapsed}
                         />
                       ))}
                     </ul>
