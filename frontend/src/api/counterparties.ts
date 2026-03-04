@@ -57,6 +57,10 @@ export type RuleDto = {
 };
 
 export const getCounterpartyFolders = (token: string) => apiFetch<CounterpartyFolderDto[]>("/counterparties/folders", { method: "GET" }, token);
+export const createCounterpartyFolder = (token: string, payload: Partial<CounterpartyFolderDto>) =>
+  apiFetch<CounterpartyFolderDto>("/counterparties/folders", { method: "POST", body: JSON.stringify(payload) }, token);
+export const updateCounterpartyFolder = (token: string, id: number, payload: Partial<CounterpartyFolderDto>) =>
+  apiFetch<CounterpartyFolderDto>(`/counterparties/folders/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
 export const getCounterparties = (token: string, includeArchived = false) =>
   apiFetch<CounterpartyDto[]>(`/counterparties?include_archived=${includeArchived}`, { method: "GET" }, token);
 export const createCounterparty = (token: string, payload: Partial<CounterpartyDto>) =>

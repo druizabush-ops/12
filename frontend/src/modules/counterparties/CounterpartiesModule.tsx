@@ -1,198 +1,177 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { DragEndEvent } from "@dnd-kit/core";
 
 import {
   CounterpartyDto,
   CounterpartyFolderDto,
-  RuleDto,
-  archiveCounterparty,
-  createAutoTaskRule,
   createCounterparty,
-  getAutoTaskRules,
+  createCounterpartyFolder,
   getCounterparties,
   getCounterpartyFolders,
-  restoreCounterparty,
-  updateAutoTaskRule,
   updateCounterparty,
+  updateCounterpartyFolder,
 } from "../../api/counterparties";
-import { getUsers } from "../../api/tasks";
 import { useAuth } from "../../contexts/AuthContext";
 import { ModuleRuntimeProps } from "../../types/module";
-
-const emptyCounterparty: Partial<CounterpartyDto> = {
-  folder_id: 0,
-  group_id: null,
-  is_archived: false,
-  status: "active",
-  sort_order: 0,
-  name: "",
-};
+import CounterpartiesToolbar from "./CounterpartiesToolbar";
+import CounterpartiesTree, { TreeNode } from "./CounterpartiesTree";
+import CounterpartyViewer from "./CounterpartyViewer";
+import CreateCounterpartyModal from "./CreateCounterpartyModal";
+import CreateFolderModal from "./CreateFolderModal";
 
 const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const { token } = useAuth();
   const [folders, setFolders] = useState<CounterpartyFolderDto[]>([]);
   const [counterparties, setCounterparties] = useState<CounterpartyDto[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Record<number, boolean>>({});
   const [showArchive, setShowArchive] = useState(false);
-  const [form, setForm] = useState<Partial<CounterpartyDto>>(emptyCounterparty);
-  const [users, setUsers] = useState<{ id: number; username: string }[]>([]);
-  const [rules, setRules] = useState<RuleDto[]>([]);
-  const [error, setError] = useState("");
-
-  const selected = useMemo(() => counterparties.find((item) => item.id === selectedId) ?? null, [counterparties, selectedId]);
-
-  const visibleCounterparties = useMemo(() => {
-    return counterparties.filter((item) => (showArchive ? item.is_archived : !item.is_archived));
-  }, [counterparties, showArchive]);
+  const [search, setSearch] = useState("");
+  const [showCounterpartyModal, setShowCounterpartyModal] = useState(false);
+  const [showFolderModal, setShowFolderModal] = useState(false);
+  const [editingCounterparty, setEditingCounterparty] = useState<CounterpartyDto | null>(null);
 
   const loadAll = async () => {
     if (!token) return;
-    const [nextFolders, nextCounterparties, nextUsers] = await Promise.all([
-      getCounterpartyFolders(token),
-      getCounterparties(token, true),
-      getUsers(token),
-    ]);
+    const [nextFolders, nextCounterparties] = await Promise.all([getCounterpartyFolders(token), getCounterparties(token, true)]);
     setFolders(nextFolders);
     setCounterparties(nextCounterparties);
-    setUsers(nextUsers);
+    setExpandedFolders((prev) => {
+      const next = { ...prev };
+      nextFolders.forEach((folder) => {
+        if (next[folder.id] === undefined) next[folder.id] = true;
+      });
+      return next;
+    });
   };
 
   useEffect(() => {
     void loadAll();
   }, [token]);
 
-  useEffect(() => {
-    if (!token || !selectedId) {
-      setRules([]);
-      return;
-    }
-    getAutoTaskRules(token, selectedId).then(setRules).catch(() => setRules([]));
-  }, [token, selectedId]);
+  const visibleCounterparties = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return counterparties.filter((item) => {
+      if (!showArchive && item.is_archived) return false;
+      if (!query) return true;
+      return [item.name, item.legal_name, item.city, item.product_group].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [counterparties, search, showArchive]);
 
-  useEffect(() => {
-    if (!selected) {
-      setForm(emptyCounterparty);
-      return;
-    }
-    setForm(selected);
-  }, [selected]);
+  const selected = useMemo(() => counterparties.find((item) => item.id === selectedId) ?? null, [counterparties, selectedId]);
 
-  const onSaveCounterparty = async (event: FormEvent) => {
-    event.preventDefault();
+  const submitFolder = async (payload: { name: string; parent_id: number | null }) => {
     if (!token) return;
-    setError("");
-    try {
-      if (selectedId) {
-        await updateCounterparty(token, selectedId, form);
-      } else {
-        const created = await createCounterparty(token, form);
-        setSelectedId(created.id);
-      }
-      await loadAll();
-    } catch (e) {
-      setError(String(e));
-    }
-  };
-
-  const onArchiveToggle = async () => {
-    if (!token || !selectedId) return;
-    if (selected?.is_archived) {
-      await restoreCounterparty(token, selectedId);
-    } else {
-      await archiveCounterparty(token, selectedId);
-    }
+    await createCounterpartyFolder(token, payload);
+    setShowFolderModal(false);
     await loadAll();
   };
 
-  const onCreateRule = async () => {
-    if (!token || !selectedId) return;
-    const defaultUser = users[0]?.id;
-    if (!defaultUser) return;
-    await createAutoTaskRule(token, selectedId, {
-      is_enabled: true,
-      title: "Запрос заказа",
-      kind: "order_request",
-      schedule: {
-        recurrence_type: "weekly",
-        recurrence_interval: 1,
-        recurrence_days_of_week: [selected?.order_day_of_week ?? 1],
-        recurrence_end_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 10),
-      },
-      primary_task: {
-        assignee_user_id: defaultUser,
-        text: `Запросить заказ у ${selected?.name ?? "контрагента"}`,
-        due_time: selected?.order_deadline_time,
-      },
-      review_task: { enabled: false, assignee_user_id: null, text: null, due_time: selected?.order_deadline_time ?? null },
-    });
-    setRules(await getAutoTaskRules(token, selectedId));
+  const submitCounterparty = async (payload: Partial<CounterpartyDto>) => {
+    if (!token) return;
+    if (editingCounterparty) {
+      await updateCounterparty(token, editingCounterparty.id, payload);
+      setSelectedId(editingCounterparty.id);
+    } else {
+      const created = await createCounterparty(token, payload);
+      setSelectedId(created.id);
+    }
+    setEditingCounterparty(null);
+    setShowCounterpartyModal(false);
+    await loadAll();
   };
 
-  const onRecreateRule = async (rule: RuleDto) => {
-    if (!token || !selectedId) return;
-    const replace = window.confirm("Удалить существующие серии и пересоздать? OK=удалить+пересоздать, Отмена=оставить и создать новую");
-    await updateAutoTaskRule(token, selectedId, rule.id, {
-      ...rule,
-      update_mode: replace ? "replace_existing" : "keep_existing",
-    });
-    setRules(await getAutoTaskRules(token, selectedId));
+  const isDescendantFolder = (folderId: number, maybeDescendantId: number): boolean => {
+    const byId = new Map(folders.map((item) => [item.id, item]));
+    let current = byId.get(maybeDescendantId) ?? null;
+    while (current) {
+      if (current.parent_id === folderId) return true;
+      current = current.parent_id ? byId.get(current.parent_id) ?? null : null;
+    }
+    return false;
+  };
+
+  const onDragEnd = async (event: DragEndEvent, visibleNodes: TreeNode[]) => {
+    if (!token || !event.over || event.active.id === event.over.id) return;
+
+    const activeNode = visibleNodes.find((node) => node.id === String(event.active.id));
+    const overNode = visibleNodes.find((node) => node.id === String(event.over?.id));
+    if (!activeNode || !overNode) return;
+
+    if (activeNode.type === "folder") {
+      let parentId: number | null = null;
+      if (overNode.type === "folder") parentId = overNode.folder.id;
+      if (overNode.type === "counterparty") parentId = overNode.counterparty.folder_id;
+      if (parentId === activeNode.folder.id || (parentId && isDescendantFolder(activeNode.folder.id, parentId))) return;
+
+      const siblingFolders = folders
+        .filter((item) => item.id !== activeNode.folder.id && item.parent_id === parentId)
+        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      const sortOrder = siblingFolders.length;
+      await updateCounterpartyFolder(token, activeNode.folder.id, { parent_id: parentId, sort_order: sortOrder });
+      await loadAll();
+      return;
+    }
+
+    const moved = activeNode.counterparty;
+    const parentFolderId = overNode.type === "folder" ? overNode.folder.id : overNode.counterparty.folder_id;
+    const siblings = counterparties
+      .filter((item) => item.id !== moved.id && item.folder_id === parentFolderId)
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+    const sortOrder = siblings.length;
+
+    await updateCounterparty(token, moved.id, { ...moved, folder_id: parentFolderId, sort_order: sortOrder });
+    await loadAll();
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px 1fr", gap: 16 }}>
-      <section className="admin-card" style={{ maxHeight: "80vh", overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3>Папки и контрагенты</h3>
-          <button type="button" className="ghost-button" onClick={() => setShowArchive((v) => !v)}>{showArchive ? "Активные" : "Архив"}</button>
-        </div>
-        {folders.map((folder) => (
-          <div key={folder.id} style={{ marginBottom: 12 }}>
-            <strong>{folder.name}</strong>
-            <div style={{ display: "grid", gap: 4, marginTop: 6 }}>
-              {visibleCounterparties.filter((c) => c.folder_id === folder.id).map((item) => (
-                <button key={item.id} type="button" className="ghost-button" onClick={() => setSelectedId(item.id)}>
-                  {item.name} {item.status === "inactive" ? "(не работает)" : ""}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        <button type="button" className="ghost-button" onClick={() => setSelectedId(null)}>+ Новый контрагент</button>
-      </section>
+    <div style={{ display: "grid", gap: 12 }}>
+      <CounterpartiesToolbar
+        search={search}
+        showArchive={showArchive}
+        onSearchChange={setSearch}
+        onToggleArchive={() => setShowArchive((prev) => !prev)}
+        onCreateCounterparty={() => {
+          setEditingCounterparty(null);
+          setShowCounterpartyModal(true);
+        }}
+        onCreateFolder={() => setShowFolderModal(true)}
+      />
 
-      <section className="admin-card">
-        <h3>Карточка контрагента</h3>
-        <form onSubmit={onSaveCounterparty} style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(180px, 1fr))", gap: 8 }}>
-          <select value={form.folder_id ?? 0} onChange={(e) => setForm((prev) => ({ ...prev, folder_id: Number(e.target.value) }))}>
-            <option value={0}>Выберите папку</option>
-            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
-          </select>
-          <input placeholder="Внутреннее имя" value={form.name ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} />
-          <input placeholder="Юр. название" value={form.legal_name ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, legal_name: e.target.value }))} />
-          <input placeholder="Город" value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} />
-          <input placeholder="Телефон" value={form.phone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} />
-          <input placeholder="Email" value={form.email ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
-          <input placeholder="ИНН" value={form.inn ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, inn: e.target.value }))} />
-          <input placeholder="КПП" value={form.kpp ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, kpp: e.target.value }))} />
-          <button type="submit" className="primary-button">Сохранить</button>
-          {selected ? <button type="button" className="ghost-button" onClick={() => void onArchiveToggle()}>{selected.is_archived ? "Восстановить" : "В архив"}</button> : null}
-        </form>
-        {error ? <p style={{ color: "#f87171" }}>{error}</p> : null}
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: 16 }}>
+        <CounterpartiesTree
+          folders={folders}
+          counterparties={visibleCounterparties}
+          selectedId={selectedId}
+          expandedFolders={expandedFolders}
+          onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
+          onSelectCounterparty={setSelectedId}
+          onDragEnd={(event, nodes) => void onDragEnd(event, nodes)}
+        />
+        <CounterpartyViewer
+          counterparty={selected}
+          folders={folders}
+          onEdit={() => {
+            if (!selected) return;
+            setEditingCounterparty(selected);
+            setShowCounterpartyModal(true);
+          }}
+        />
+      </div>
 
-        <hr style={{ margin: "16px 0" }} />
-        <h4>Автозадачи</h4>
-        <p>Автозадачи создаются через recurring-механизм Tasks (master + children) без cron.</p>
-        <button type="button" className="ghost-button" disabled={!selectedId} onClick={() => void onCreateRule()}>+ Добавить правило</button>
-        <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-          {rules.map((rule) => (
-            <div key={rule.id} style={{ border: "1px solid #334155", borderRadius: 8, padding: 8 }}>
-              <strong>{rule.title}</strong>
-              <div>Будет создаваться: {rule.primary_task.text}, повтор: {rule.schedule.recurrence_type} / {rule.schedule.recurrence_interval}</div>
-              <div>Источник: counterparty #{rule.counterparty_id}, rule #{rule.id}</div>
-              <button type="button" className="ghost-button" onClick={() => void onRecreateRule(rule)}>Изменить расписание</button>
-            </div>
-          ))}
-        </div>
-      </section>
+      {showCounterpartyModal ? (
+        <CreateCounterpartyModal
+          folders={folders}
+          initial={editingCounterparty}
+          onClose={() => {
+            setShowCounterpartyModal(false);
+            setEditingCounterparty(null);
+          }}
+          onSubmit={submitCounterparty}
+        />
+      ) : null}
+
+      {showFolderModal ? <CreateFolderModal folders={folders} onClose={() => setShowFolderModal(false)} onSubmit={submitFolder} /> : null}
     </div>
   );
 };
