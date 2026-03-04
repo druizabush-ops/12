@@ -4,16 +4,16 @@ export type CounterpartyFolderDto = {
   id: number;
   parent_id: number | null;
   name: string;
-  sort_order: number;
+  sort_order: number | null;
 };
 
 export type CounterpartyDto = {
   id: number;
-  folder_id: number;
+  folder_id: number | null;
   group_id: number | null;
   is_archived: boolean;
-  status: "active" | "inactive";
-  sort_order: number;
+  status: "active" | "inactive" | "archived";
+  sort_order: number | null;
   name: string;
   legal_name: string | null;
   city: string | null;

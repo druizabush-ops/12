@@ -11,13 +11,17 @@ type CounterpartyNodeProps = {
 };
 
 const CounterpartyNode = ({ id, depth, name, isSelected, isArchived, onSelect }: CounterpartyNodeProps) => {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id });
   return (
     <div
       ref={setNodeRef}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
+        borderTop: "1px solid var(--border)",
+        borderRadius: 8,
+        background: isOver ? "var(--accent-soft)" : "transparent",
+        borderColor: isOver ? "var(--accent)" : "var(--border)",
         paddingLeft: depth * 16 + 44,
         display: "flex",
         alignItems: "center",
