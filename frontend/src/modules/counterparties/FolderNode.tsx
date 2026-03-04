@@ -1,6 +1,5 @@
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { useSortable } from "@dnd-kit/sortable";
-import { ReactNode } from "react";
 
 type FolderNodeProps = {
   id: string;
@@ -10,34 +9,36 @@ type FolderNodeProps = {
   isExpanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
-  children?: ReactNode;
 };
 
-const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelect, children }: FolderNodeProps) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isOver } = useSortable({ id });
+const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelect }: FolderNodeProps) => {
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id });
+  const { attributes, listeners, setNodeRef: setDragRef, transform, transition } = useDraggable({ id });
+
   return (
     <div
-      ref={setNodeRef}
+      ref={setDropRef}
       style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
+        paddingLeft: depth * 14,
         borderRadius: 10,
         background: isOver ? "var(--accent-soft)" : "transparent",
         border: `1px solid ${isOver ? "var(--accent)" : "transparent"}`,
       }}
     >
-      <div style={{ paddingLeft: depth * 16, display: "flex", gap: 8, alignItems: "center" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <button type="button" className="ghost-button" onClick={onToggle}>{isExpanded ? "▾" : "▸"}</button>
-        <button
-          type="button"
-          className="ghost-button"
-          onClick={onSelect}
-          style={{ border: "none", fontWeight: isSelected ? 700 : 500 }}
-        >
-          <span {...attributes} {...listeners} style={{ cursor: "grab" }}>📁 {name}</span>
+        <button type="button" className="ghost-button" onClick={onSelect} style={{ fontWeight: isSelected ? 700 : 500 }}>
+          📁 {name}
         </button>
+        <span
+          ref={setDragRef}
+          {...attributes}
+          {...listeners}
+          style={{ transform: CSS.Transform.toString(transform), transition, cursor: "grab", color: "var(--text-secondary)" }}
+        >
+          ⋮⋮
+        </span>
       </div>
-      {children}
     </div>
   );
 };

@@ -26,7 +26,7 @@ const CounterpartiesToolbar = ({
       <div style={{ position: "relative", minWidth: 320, width: "min(520px, 100%)", flex: "1 1 420px" }}>
         <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "var(--text-secondary)" }}>🔍</span>
         <input
-          placeholder="Поиск по контрагентам и папкам"
+          placeholder="Поиск в выбранной папке: name / legal_name / phone / email"
           value={search}
           onChange={onSearchInput}
           style={{ width: "100%", fontSize: 16, padding: "11px 42px", borderRadius: 999, border: "1px solid var(--border)" }}
