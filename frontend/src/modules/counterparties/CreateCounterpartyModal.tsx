@@ -4,14 +4,16 @@ import { CounterpartyDto, CounterpartyFolderDto } from "../../api/counterparties
 
 type CreateCounterpartyModalProps = {
   folders: CounterpartyFolderDto[];
+  rootFolderId: number;
   initial?: Partial<CounterpartyDto> | null;
+  initialCardColor?: string | null;
   onClose: () => void;
-  onSubmit: (payload: Partial<CounterpartyDto>) => Promise<void>;
+  onSubmit: (payload: Partial<CounterpartyDto>, cardColor: string | null) => Promise<void>;
 };
 
-const CreateCounterpartyModal = ({ folders, initial, onClose, onSubmit }: CreateCounterpartyModalProps) => {
+const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardColor, onClose, onSubmit }: CreateCounterpartyModalProps) => {
   const [form, setForm] = useState<Partial<CounterpartyDto>>({
-    folder_id: initial?.folder_id ?? null,
+    folder_id: initial?.folder_id ?? rootFolderId,
     name: initial?.name ?? "",
     legal_name: initial?.legal_name ?? "",
     city: initial?.city ?? "",
@@ -29,17 +31,22 @@ const CreateCounterpartyModal = ({ folders, initial, onClose, onSubmit }: Create
     defect_notes: initial?.defect_notes ?? "",
     status: initial?.status ?? "active",
   });
+  const [cardColor, setCardColor] = useState<string>(initialCardColor ?? "");
 
   const title = useMemo(() => (initial?.id ? "Редактировать контрагента" : "Создать контрагента"), [initial?.id]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    await onSubmit({
-      ...form,
-      order_deadline_time: form.order_deadline_time || null,
-      order_day_of_week: form.order_day_of_week || null,
-      delivery_day_of_week: form.delivery_day_of_week || null,
-    });
+    await onSubmit(
+      {
+        ...form,
+        folder_id: form.folder_id ?? rootFolderId,
+        order_deadline_time: form.order_deadline_time || null,
+        order_day_of_week: form.order_day_of_week || null,
+        delivery_day_of_week: form.delivery_day_of_week || null,
+      },
+      cardColor || null,
+    );
   };
 
   return (
@@ -47,28 +54,25 @@ const CreateCounterpartyModal = ({ folders, initial, onClose, onSubmit }: Create
       <form className="admin-modal" onSubmit={(event) => void submit(event)} style={{ width: 680, maxWidth: "95vw" }}>
         <h3>{title}</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(200px, 1fr))", gap: 8 }}>
-          <select value={form.folder_id ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, folder_id: e.target.value ? Number(e.target.value) : null }))}>
-            <option value="">Каталог (корень)</option>
-            {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+          <select value={form.folder_id ?? rootFolderId} onChange={(e) => setForm((prev) => ({ ...prev, folder_id: e.target.value ? Number(e.target.value) : rootFolderId }))}>
+            <option value={rootFolderId}>Каталог (корень)</option>
+            {folders.filter((folder) => folder.id !== rootFolderId).map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
           </select>
+          <input type="color" title="Цвет карточки" value={cardColor || "#ffffff"} onChange={(e) => setCardColor(e.target.value)} />
           <input placeholder="Наименование" value={form.name ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} required />
           <input placeholder="Юр. наименование" value={form.legal_name ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, legal_name: e.target.value }))} />
           <input placeholder="Город" value={form.city ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))} />
-          <input placeholder="Товарная группа" value={form.product_group ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, product_group: e.target.value }))} />
-          <input placeholder="Отдел" value={form.department ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, department: e.target.value }))} />
           <input placeholder="Телефон" value={form.phone ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))} />
           <input placeholder="Email" value={form.email ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
           <input placeholder="Сайт" value={form.website ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
           <input placeholder="Мессенджер" value={form.messenger ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, messenger: e.target.value }))} />
-          <input placeholder="Логин" value={form.login ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, login: e.target.value }))} />
-          <input placeholder="Пароль" value={form.password ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))} />
           <input type="number" min={1} max={7} placeholder="День заявки" value={form.order_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
           <input placeholder="Дедлайн заявки (HH:MM:SS)" value={form.order_deadline_time ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value }))} />
           <input type="number" min={1} max={7} placeholder="День доставки" value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
-          <input placeholder="Заметки" value={form.defect_notes ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, defect_notes: e.target.value }))} />
         </div>
         <div className="admin-modal-actions">
           <button type="submit" className="primary-button">Сохранить</button>
+          <button type="button" className="ghost-button" onClick={() => setCardColor("")}>Сбросить цвет</button>
           <button type="button" className="ghost-button" onClick={onClose}>Отмена</button>
         </div>
       </form>

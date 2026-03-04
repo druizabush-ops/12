@@ -6,7 +6,7 @@ type RootNodeProps = {
 };
 
 const RootNode = ({ isSelected, onSelect }: RootNodeProps) => {
-  const { setNodeRef, isOver } = useDroppable({ id: "root" });
+  const { setNodeRef, isOver } = useDroppable({ id: "root-folder-drop" });
 
   return (
     <button
