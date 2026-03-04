@@ -24,7 +24,7 @@ const CreateFolderModal = ({ folders, onClose, onSubmit }: CreateFolderModalProp
         <h3>Создать папку</h3>
         <input placeholder="Название папки" value={name} onChange={(event) => setName(event.target.value)} required />
         <select value={parentId ?? ""} onChange={(event) => setParentId(event.target.value ? Number(event.target.value) : null)}>
-          <option value="">Корень</option>
+          <option value="">Каталог (корень)</option>
           {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
         </select>
         <div className="admin-modal-actions">

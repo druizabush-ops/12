@@ -2,19 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { DragEndEvent } from "@dnd-kit/core";
 
 import {
+  archiveCounterparty,
   CounterpartyDto,
   CounterpartyFolderDto,
   createCounterparty,
   createCounterpartyFolder,
   getCounterparties,
   getCounterpartyFolders,
+  restoreCounterparty,
   updateCounterparty,
   updateCounterpartyFolder,
 } from "../../api/counterparties";
 import { useAuth } from "../../contexts/AuthContext";
 import { ModuleRuntimeProps } from "../../types/module";
 import CounterpartiesToolbar from "./CounterpartiesToolbar";
-import CounterpartiesTree, { TreeNode } from "./CounterpartiesTree";
+import CounterpartiesTree, { SelectedTreeNode, TreeNode } from "./CounterpartiesTree";
 import CounterpartyViewer from "./CounterpartyViewer";
 import CreateCounterpartyModal from "./CreateCounterpartyModal";
 import CreateFolderModal from "./CreateFolderModal";
@@ -23,7 +25,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const { token } = useAuth();
   const [folders, setFolders] = useState<CounterpartyFolderDto[]>([]);
   const [counterparties, setCounterparties] = useState<CounterpartyDto[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedNode, setSelectedNode] = useState<SelectedTreeNode>({ type: "root" });
   const [expandedFolders, setExpandedFolders] = useState<Record<number, boolean>>({});
   const [showArchive, setShowArchive] = useState(false);
   const [search, setSearch] = useState("");
@@ -34,8 +36,8 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const loadAll = async () => {
     if (!token) return;
     const [nextFolders, nextCounterparties] = await Promise.all([getCounterpartyFolders(token), getCounterparties(token, true)]);
-    setFolders(nextFolders);
-    setCounterparties(nextCounterparties);
+    setFolders(nextFolders.map((folder) => ({ ...folder, sort_order: folder.sort_order ?? 0 })));
+    setCounterparties(nextCounterparties.map((counterparty) => ({ ...counterparty, sort_order: counterparty.sort_order ?? 0 })));
     setExpandedFolders((prev) => {
       const next = { ...prev };
       nextFolders.forEach((folder) => {
@@ -52,13 +54,29 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const visibleCounterparties = useMemo(() => {
     const query = search.trim().toLowerCase();
     return counterparties.filter((item) => {
-      if (!showArchive && item.is_archived) return false;
+      if (!showArchive && (item.is_archived || item.status === "archived")) return false;
       if (!query) return true;
       return [item.name, item.legal_name, item.city, item.product_group].some((value) => value?.toLowerCase().includes(query));
     });
   }, [counterparties, search, showArchive]);
 
-  const selected = useMemo(() => counterparties.find((item) => item.id === selectedId) ?? null, [counterparties, selectedId]);
+  const selectedCounterparty = useMemo(() => {
+    if (selectedNode.type !== "counterparty") return null;
+    return counterparties.find((item) => item.id === selectedNode.id) ?? null;
+  }, [counterparties, selectedNode]);
+
+  const selectedFolder = useMemo(() => {
+    if (selectedNode.type !== "folder") return null;
+    return folders.find((item) => item.id === selectedNode.id) ?? null;
+  }, [folders, selectedNode]);
+
+  const folderContents = useMemo(() => {
+    const parentId = selectedNode.type === "folder" ? selectedNode.id : null;
+    return {
+      folders: folders.filter((item) => item.parent_id === parentId),
+      counterparties: visibleCounterparties.filter((item) => item.folder_id === parentId),
+    };
+  }, [folders, selectedNode, visibleCounterparties]);
 
   const submitFolder = async (payload: { name: string; parent_id: number | null }) => {
     if (!token) return;
@@ -71,10 +89,10 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
     if (!token) return;
     if (editingCounterparty) {
       await updateCounterparty(token, editingCounterparty.id, payload);
-      setSelectedId(editingCounterparty.id);
+      setSelectedNode({ type: "counterparty", id: editingCounterparty.id });
     } else {
       const created = await createCounterparty(token, payload);
-      setSelectedId(created.id);
+      setSelectedNode({ type: "counterparty", id: created.id });
     }
     setEditingCounterparty(null);
     setShowCounterpartyModal(false);
@@ -106,7 +124,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
 
       const siblingFolders = folders
         .filter((item) => item.id !== activeNode.folder.id && item.parent_id === parentId)
-        .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id);
       const sortOrder = siblingFolders.length;
       await updateCounterpartyFolder(token, activeNode.folder.id, { parent_id: parentId, sort_order: sortOrder });
       await loadAll();
@@ -114,13 +132,23 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
     }
 
     const moved = activeNode.counterparty;
-    const parentFolderId = overNode.type === "folder" ? overNode.folder.id : overNode.counterparty.folder_id;
+    const parentFolderId = overNode.type === "root" ? null : overNode.type === "folder" ? overNode.folder.id : overNode.counterparty.folder_id;
     const siblings = counterparties
       .filter((item) => item.id !== moved.id && item.folder_id === parentFolderId)
-      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id);
     const sortOrder = siblings.length;
 
     await updateCounterparty(token, moved.id, { ...moved, folder_id: parentFolderId, sort_order: sortOrder });
+    await loadAll();
+  };
+
+  const toggleArchive = async () => {
+    if (!token || !selectedCounterparty) return;
+    if (selectedCounterparty.status === "archived" || selectedCounterparty.is_archived) {
+      await restoreCounterparty(token, selectedCounterparty.id);
+    } else {
+      await archiveCounterparty(token, selectedCounterparty.id);
+    }
     await loadAll();
   };
 
@@ -142,20 +170,30 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
         <CounterpartiesTree
           folders={folders}
           counterparties={visibleCounterparties}
-          selectedId={selectedId}
+          selectedNode={selectedNode}
           expandedFolders={expandedFolders}
           onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
-          onSelectCounterparty={setSelectedId}
+          onSelectRoot={() => setSelectedNode({ type: "root" })}
+          onSelectFolder={(folderId) => setSelectedNode({ type: "folder", id: folderId })}
+          onSelectCounterparty={(counterpartyId) => setSelectedNode({ type: "counterparty", id: counterpartyId })}
           onDragEnd={(event, nodes) => void onDragEnd(event, nodes)}
         />
         <CounterpartyViewer
-          counterparty={selected}
+          mode={selectedNode.type === "counterparty" ? "counterparty" : "folder"}
+          counterparty={selectedCounterparty}
+          folder={selectedFolder}
           folders={folders}
+          contentFolders={folderContents.folders}
+          contentCounterparties={folderContents.counterparties}
+          showArchive={showArchive}
           onEdit={() => {
-            if (!selected) return;
-            setEditingCounterparty(selected);
+            if (!selectedCounterparty) return;
+            setEditingCounterparty(selectedCounterparty);
             setShowCounterpartyModal(true);
           }}
+          onToggleArchive={() => void toggleArchive()}
+          onSelectCounterparty={(counterpartyId) => setSelectedNode({ type: "counterparty", id: counterpartyId })}
+          onSelectFolder={(folderId) => setSelectedNode({ type: "folder", id: folderId })}
         />
       </div>
 

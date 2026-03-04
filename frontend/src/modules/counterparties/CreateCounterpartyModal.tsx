@@ -11,7 +11,7 @@ type CreateCounterpartyModalProps = {
 
 const CreateCounterpartyModal = ({ folders, initial, onClose, onSubmit }: CreateCounterpartyModalProps) => {
   const [form, setForm] = useState<Partial<CounterpartyDto>>({
-    folder_id: initial?.folder_id ?? folders[0]?.id ?? 0,
+    folder_id: initial?.folder_id ?? null,
     name: initial?.name ?? "",
     legal_name: initial?.legal_name ?? "",
     city: initial?.city ?? "",
@@ -47,8 +47,8 @@ const CreateCounterpartyModal = ({ folders, initial, onClose, onSubmit }: Create
       <form className="admin-modal" onSubmit={(event) => void submit(event)} style={{ width: 680, maxWidth: "95vw" }}>
         <h3>{title}</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(200px, 1fr))", gap: 8 }}>
-          <select value={form.folder_id ?? 0} onChange={(e) => setForm((prev) => ({ ...prev, folder_id: Number(e.target.value) }))} required>
-            <option value={0}>Папка</option>
+          <select value={form.folder_id ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, folder_id: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">Каталог (корень)</option>
             {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
           </select>
           <input placeholder="Наименование" value={form.name ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} required />
