@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.security import get_current_user
@@ -21,6 +21,7 @@ from app.modules.counterparties.service import (
     archive_counterparty,
     create_auto_task_rule,
     create_counterparty,
+    delete_auto_task_rule,
     create_folder,
     get_counterparty_dto,
     get_task_creator_settings,
@@ -166,3 +167,12 @@ def post_stop_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get
         return stop_auto_task_rule(db, counterparty_id, rule_id)
     except ValueError:
         raise HTTPException(status_code=404, detail="Правило не найдено")
+
+
+@router.delete("/{counterparty_id}/auto-tasks/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get_db)) -> Response:
+    try:
+        delete_auto_task_rule(db, counterparty_id, rule_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

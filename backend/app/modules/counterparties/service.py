@@ -270,7 +270,11 @@ def list_auto_task_rules(db: Session, counterparty_id: int) -> list[Counterparty
     counterparty = db.get(Counterparty, counterparty_id)
     if counterparty is None:
         raise ValueError("counterparty_not_found")
-    rules = db.scalars(select(CounterpartyAutoTaskRule).where(CounterpartyAutoTaskRule.counterparty_id == counterparty_id).order_by(CounterpartyAutoTaskRule.id.desc())).all()
+    rules = db.scalars(
+        select(CounterpartyAutoTaskRule)
+        .where(CounterpartyAutoTaskRule.counterparty_id == counterparty_id, CounterpartyAutoTaskRule.state != "deleted")
+        .order_by(CounterpartyAutoTaskRule.id.desc())
+    ).all()
     for rule in rules:
         ensure_horizon(db, rule)
     db.commit()
@@ -405,7 +409,7 @@ def update_auto_task_rule(db: Session, counterparty_id: int, rule_id: int, paylo
 
 def pause_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> CounterpartyAutoTaskRuleDto:
     rule = db.get(CounterpartyAutoTaskRule, rule_id)
-    if rule is None or rule.counterparty_id != counterparty_id:
+    if rule is None or rule.counterparty_id != counterparty_id or rule.state == "deleted":
         raise ValueError("rule_not_found")
     rule.state = "paused"
     rule.updated_at = _now()
@@ -415,7 +419,7 @@ def pause_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> Cou
 
 def resume_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> CounterpartyAutoTaskRuleDto:
     rule = db.get(CounterpartyAutoTaskRule, rule_id)
-    if rule is None or rule.counterparty_id != counterparty_id:
+    if rule is None or rule.counterparty_id != counterparty_id or rule.state == "deleted":
         raise ValueError("rule_not_found")
     rule.state = "active"
     rule.updated_at = _now()
@@ -426,7 +430,7 @@ def resume_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> Co
 
 def stop_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> CounterpartyAutoTaskRuleDto:
     rule = db.get(CounterpartyAutoTaskRule, rule_id)
-    if rule is None or rule.counterparty_id != counterparty_id:
+    if rule is None or rule.counterparty_id != counterparty_id or rule.state == "deleted":
         raise ValueError("rule_not_found")
     rule.state = "stopped"
     rule.updated_at = _now()
@@ -435,3 +439,24 @@ def stop_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> Coun
         master.recurrence_state = "stopped"
     db.commit()
     return _rule_to_dto(db, rule)
+
+
+def delete_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> None:
+    rule = db.get(CounterpartyAutoTaskRule, rule_id)
+    if rule is None or rule.counterparty_id != counterparty_id or rule.state == "deleted":
+        raise ValueError("rule_not_found")
+    rule.state = "deleted"
+    rule.is_enabled = False
+    rule.updated_at = _now()
+
+    master = db.get(Task, rule.linked_task_master_id) if rule.linked_task_master_id else None
+    if master:
+        master.recurrence_state = "stopped"
+        db.execute(
+            delete(Task).where(
+                Task.recurrence_master_task_id == master.id,
+                Task.status != "done",
+                Task.due_date >= _now().date(),
+            )
+        )
+    db.commit()
