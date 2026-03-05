@@ -24,6 +24,8 @@ import CreateFolderModal from "./CreateFolderModal";
 import FolderCounterpartiesList from "./FolderCounterpartiesList";
 
 const ROOT_NAME = "Каталог";
+const columnHeaderStyle = { fontWeight: 600, fontSize: 14, marginBottom: 8 };
+const columnShellStyle = { display: "flex", flexDirection: "column" as const, minHeight: 0, overflow: "hidden", padding: "0 10px" };
 
 const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const { token } = useAuth();
@@ -191,35 +193,58 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
       />
 
       <DndContext onDragEnd={(event) => void onDragEnd(event)}>
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 1fr 320px", gap: 12, alignItems: "start" }}>
-          <CounterpartiesTree
-            folders={folders}
-            rootFolderId={rootFolderId}
-            selectedFolderId={selectedFolderId}
-            expandedFolders={expandedFolders}
-            onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
-            onSelectFolder={(folderId) => {
-              setSelectedFolderId(folderId);
-              setSelectedCounterpartyId(null);
-            }}
-          />
-          <FolderCounterpartiesList
-            items={selectedFolderCounterparties}
-            selectedCounterpartyId={selectedCounterpartyId}
-            onSelect={(counterpartyId) => setSelectedCounterpartyId(counterpartyId)}
-          />
-          <CounterpartyViewer
-            counterparty={selectedCounterparty}
-            folders={folders}
-            cardColor={selectedCounterparty ? cardColors[selectedCounterparty.id] ?? null : null}
-            onEdit={() => {
-              if (!selectedCounterparty) return;
-              setEditingCounterparty(selectedCounterparty);
-              setShowCounterpartyModal(true);
-            }}
-            onToggleArchive={() => void toggleArchive()}
-          />
-          <AutoTasksPanel counterparty={selectedCounterparty} />
+        <div style={{ display: "grid", gridTemplateColumns: "260px 340px minmax(0, 1fr) 340px", alignItems: "stretch", border: "1px solid var(--border)", borderRadius: 12, minHeight: "74vh" }}>
+          <div style={columnShellStyle}>
+            <div style={columnHeaderStyle}>Папки</div>
+            <div style={{ minHeight: 0, overflow: "auto" }}>
+              <CounterpartiesTree
+                folders={folders}
+                rootFolderId={rootFolderId}
+                selectedFolderId={selectedFolderId}
+                expandedFolders={expandedFolders}
+                onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
+                onSelectFolder={(folderId) => {
+                  setSelectedFolderId(folderId);
+                  setSelectedCounterpartyId(null);
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+            <div style={columnHeaderStyle}>Контрагенты</div>
+            <div style={{ minHeight: 0, overflow: "auto" }}>
+              <FolderCounterpartiesList
+                items={selectedFolderCounterparties}
+                selectedCounterpartyId={selectedCounterpartyId}
+                onSelect={(counterpartyId) => setSelectedCounterpartyId(counterpartyId)}
+              />
+            </div>
+          </div>
+
+          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+            <div style={columnHeaderStyle}>Карточка</div>
+            <div style={{ minHeight: 0, overflow: "auto" }}>
+              <CounterpartyViewer
+                counterparty={selectedCounterparty}
+                folders={folders}
+                cardColor={selectedCounterparty ? cardColors[selectedCounterparty.id] ?? null : null}
+                onEdit={() => {
+                  if (!selectedCounterparty) return;
+                  setEditingCounterparty(selectedCounterparty);
+                  setShowCounterpartyModal(true);
+                }}
+                onToggleArchive={() => void toggleArchive()}
+              />
+            </div>
+          </div>
+
+          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+            <div style={columnHeaderStyle}>Автозадачи</div>
+            <div style={{ minHeight: 0, overflow: "auto" }}>
+              <AutoTasksPanel counterparty={selectedCounterparty} />
+            </div>
+          </div>
         </div>
       </DndContext>
 

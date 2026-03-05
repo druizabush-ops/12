@@ -25,10 +25,9 @@ const DraggableRow = ({ item, isSelected, onSelect }: { item: CounterpartyDto; i
 };
 
 const FolderCounterpartiesList = ({ items, selectedCounterpartyId, onSelect }: Props) => (
-  <section className="admin-card" style={{ maxHeight: "74vh", overflow: "auto" }}>
-    <h3 style={{ marginTop: 0 }}>Содержимое папки</h3>
+  <section className="admin-card">
     {items.length === 0 ? (
-      <p style={{ color: "var(--text-secondary)" }}>Нет контрагентов в выбранной папке.</p>
+      <p style={{ color: "var(--text-secondary)", margin: 0 }}>Нет контрагентов в выбранной папке.</p>
     ) : (
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
