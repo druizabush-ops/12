@@ -294,6 +294,19 @@ Collapsed режим:
 Причина:
 Риски/заметки:
 
+
+### [2026-03-05] — counterparties-autotasks-v1
+Добавлено:
+- Counterparties AutoTasks v1: отдельные правила MAKE_ORDER/SEND_ORDER, rolling ensure горизонта 15 дней без cron, источники задач source_module/source_counterparty_id/source_trigger_id.
+- Настройка counterparties.task_creator_user_id и API управления состояниями правила (pause/resume/stop).
+Изменено:
+- API контрагентов для автозадач переведён на /counterparties/{id}/auto-tasks и PATCH с action=keep|replace при смене расписания.
+- Frontend 4-й колонки «Автозадачи»: список правил, создание, смена статусов, keep/replace при изменении расписания.
+Причина:
+- Нужен управляемый rolling-план задач поставщикам на 15 дней вперёд с сохранением истории выполнения в Tasks recurring-модели.
+Риски/заметки:
+- Миграция 0012 не содержит downgrade; при rollout требуется прямой путь upgrade.
+
 ### [2026-03-03] — work
 Добавлено:
 - BLOCK COUNTERPARTIES v1 (дерево, карточка, архив, автозадачи через recurring Tasks)

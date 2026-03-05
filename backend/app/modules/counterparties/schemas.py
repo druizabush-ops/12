@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 CounterpartyStatus = Literal["active", "inactive"]
-CounterpartyAutoTaskKind = Literal["order_request", "custom"]
-RecurrenceType = Literal["daily", "weekly", "monthly", "yearly"]
+CounterpartyAutoTaskKind = Literal["MAKE_ORDER", "SEND_ORDER"]
+CounterpartyAutoTaskState = Literal["active", "paused", "stopped"]
 
 
 class CounterpartyFolderCreatePayload(BaseModel):
@@ -70,56 +70,51 @@ class CounterpartyDto(CounterpartyUpsertPayload):
     updated_at: datetime
 
 
-class AutoTaskSchedulePayload(BaseModel):
-    recurrence_type: RecurrenceType
-    recurrence_interval: int = Field(ge=1)
-    recurrence_days_of_week: list[int] = Field(default_factory=list)
-    recurrence_end_date: date
-
-
-class AutoTaskPrimaryPayload(BaseModel):
-    assignee_user_id: int
-    text: str = Field(min_length=1)
-    due_time: time | None = None
-
-
-class AutoTaskReviewPayload(BaseModel):
-    enabled: bool = False
-    assignee_user_id: int | None = None
-    text: str | None = None
-    due_time: time | None = None
-
-
-class CounterpartyAutoTaskRuleUpsertPayload(BaseModel):
+class CounterpartyAutoTaskRuleCreatePayload(BaseModel):
+    task_kind: CounterpartyAutoTaskKind
+    title_template: str = Field(min_length=1, max_length=255)
+    description_template: str | None = None
+    assignee_user_ids: list[int] = Field(default_factory=list)
+    verifier_user_ids: list[int] | None = None
     is_enabled: bool = True
-    title: str = Field(min_length=1, max_length=255)
-    kind: CounterpartyAutoTaskKind = "order_request"
-    schedule: AutoTaskSchedulePayload
-    primary_task: AutoTaskPrimaryPayload
-    review_task: AutoTaskReviewPayload = Field(default_factory=AutoTaskReviewPayload)
-    update_mode: Literal["keep_existing", "replace_existing"] | None = None
-
-    @model_validator(mode="after")
-    def validate_review(self) -> "CounterpartyAutoTaskRuleUpsertPayload":
-        if self.review_task.enabled and (self.review_task.assignee_user_id is None or not self.review_task.text):
-            raise ValueError("review_task_requires_assignee_and_text")
-        return self
+    schedule_weekday: int = Field(ge=1, le=7)
+    schedule_due_time: time | None = None
+    horizon_days: int = Field(default=15, ge=1, le=30)
 
 
-class CounterpartyAutoTaskBindingDto(BaseModel):
-    primary_master_task_id: str
-    review_master_task_id: str | None
+class CounterpartyAutoTaskRulePatchPayload(BaseModel):
+    task_kind: CounterpartyAutoTaskKind | None = None
+    title_template: str | None = Field(default=None, min_length=1, max_length=255)
+    description_template: str | None = None
+    assignee_user_ids: list[int] | None = None
+    verifier_user_ids: list[int] | None = None
+    is_enabled: bool | None = None
+    schedule_weekday: int | None = Field(default=None, ge=1, le=7)
+    schedule_due_time: time | None = None
+    horizon_days: int | None = Field(default=None, ge=1, le=30)
 
 
 class CounterpartyAutoTaskRuleDto(BaseModel):
     id: int
     counterparty_id: int
+    task_kind: CounterpartyAutoTaskKind
+    title_template: str
+    description_template: str | None
+    assignee_user_ids: list[int]
+    verifier_user_ids: list[int] | None
     is_enabled: bool
-    title: str
-    kind: CounterpartyAutoTaskKind
-    schedule: AutoTaskSchedulePayload
-    primary_task: AutoTaskPrimaryPayload
-    review_task: AutoTaskReviewPayload
-    binding: CounterpartyAutoTaskBindingDto | None
+    schedule_weekday: int
+    schedule_due_time: time | None
+    horizon_days: int
+    linked_task_master_id: str | None
+    state: CounterpartyAutoTaskState
     created_at: datetime
     updated_at: datetime
+
+
+class CounterpartyTaskCreatorSettingsPayload(BaseModel):
+    task_creator_user_id: int | None = None
+
+
+class CounterpartyTaskCreatorSettingsDto(BaseModel):
+    task_creator_user_id: int | None

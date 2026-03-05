@@ -3,16 +3,18 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.context import UserContext
 from app.core.security import get_current_user
 from app.modules.auth.service import get_db
 from app.modules.counterparties.schemas import (
+    CounterpartyAutoTaskRuleCreatePayload,
     CounterpartyAutoTaskRuleDto,
-    CounterpartyAutoTaskRuleUpsertPayload,
+    CounterpartyAutoTaskRulePatchPayload,
     CounterpartyDto,
     CounterpartyFolderCreatePayload,
     CounterpartyFolderDto,
     CounterpartyFolderUpdatePayload,
+    CounterpartyTaskCreatorSettingsDto,
+    CounterpartyTaskCreatorSettingsPayload,
     CounterpartyUpsertPayload,
 )
 from app.modules.counterparties.service import (
@@ -21,15 +23,30 @@ from app.modules.counterparties.service import (
     create_counterparty,
     create_folder,
     get_counterparty_dto,
+    get_task_creator_settings,
     list_auto_task_rules,
     list_counterparties,
     list_folders,
+    pause_auto_task_rule,
+    resume_auto_task_rule,
+    stop_auto_task_rule,
     update_auto_task_rule,
     update_counterparty,
     update_folder,
+    update_task_creator_settings,
 )
 
 router = APIRouter(prefix="/counterparties", tags=["counterparties"], dependencies=[Depends(get_current_user)])
+
+
+@router.get("/settings", response_model=CounterpartyTaskCreatorSettingsDto)
+def get_settings(db: Session = Depends(get_db)) -> CounterpartyTaskCreatorSettingsDto:
+    return get_task_creator_settings(db)
+
+
+@router.patch("/settings", response_model=CounterpartyTaskCreatorSettingsDto)
+def patch_settings(payload: CounterpartyTaskCreatorSettingsPayload, db: Session = Depends(get_db)) -> CounterpartyTaskCreatorSettingsDto:
+    return update_task_creator_settings(db, payload)
 
 
 @router.get("/folders", response_model=list[CounterpartyFolderDto])
@@ -43,11 +60,7 @@ def post_folder(payload: CounterpartyFolderCreatePayload, db: Session = Depends(
 
 
 @router.patch("/folders/{folder_id}", response_model=CounterpartyFolderDto)
-def patch_folder(
-    folder_id: int,
-    payload: CounterpartyFolderUpdatePayload,
-    db: Session = Depends(get_db),
-) -> CounterpartyFolderDto:
+def patch_folder(folder_id: int, payload: CounterpartyFolderUpdatePayload, db: Session = Depends(get_db)) -> CounterpartyFolderDto:
     try:
         return update_folder(db, folder_id, payload)
     except ValueError:
@@ -96,38 +109,60 @@ def post_restore_counterparty(counterparty_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Контрагент не найден")
 
 
-@router.get("/{counterparty_id}/auto-task-rules", response_model=list[CounterpartyAutoTaskRuleDto])
+@router.get("/{counterparty_id}/auto-tasks", response_model=list[CounterpartyAutoTaskRuleDto])
 def get_rules(counterparty_id: int, db: Session = Depends(get_db)) -> list[CounterpartyAutoTaskRuleDto]:
-    return list_auto_task_rules(db, counterparty_id)
-
-
-@router.post("/{counterparty_id}/auto-task-rules", response_model=CounterpartyAutoTaskRuleDto, status_code=status.HTTP_201_CREATED)
-def post_rule(
-    counterparty_id: int,
-    payload: CounterpartyAutoTaskRuleUpsertPayload,
-    current_user: UserContext = Depends(get_current_user),
-    db: Session = Depends(get_db),
-) -> CounterpartyAutoTaskRuleDto:
     try:
-        return create_auto_task_rule(db, current_user.id, counterparty_id, payload)
+        return list_auto_task_rules(db, counterparty_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Контрагент не найден")
+
+
+@router.post("/{counterparty_id}/auto-tasks", response_model=CounterpartyAutoTaskRuleDto, status_code=status.HTTP_201_CREATED)
+def post_rule(counterparty_id: int, payload: CounterpartyAutoTaskRuleCreatePayload, db: Session = Depends(get_db)) -> CounterpartyAutoTaskRuleDto:
+    try:
+        return create_auto_task_rule(db, counterparty_id, payload)
     except ValueError as exc:
         if str(exc) == "counterparty_not_found":
             raise HTTPException(status_code=404, detail="Контрагент не найден")
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.put("/{counterparty_id}/auto-task-rules/{rule_id}", response_model=CounterpartyAutoTaskRuleDto)
-def put_rule(
+@router.patch("/{counterparty_id}/auto-tasks/{rule_id}", response_model=CounterpartyAutoTaskRuleDto)
+def patch_rule(
     counterparty_id: int,
     rule_id: int,
-    payload: CounterpartyAutoTaskRuleUpsertPayload,
-    current_user: UserContext = Depends(get_current_user),
+    payload: CounterpartyAutoTaskRulePatchPayload,
+    action: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> CounterpartyAutoTaskRuleDto:
     try:
-        return update_auto_task_rule(db, current_user.id, counterparty_id, rule_id, payload)
+        return update_auto_task_rule(db, counterparty_id, rule_id, payload, action)
     except ValueError as exc:
         code = str(exc)
         if code in {"counterparty_not_found", "rule_not_found"}:
             raise HTTPException(status_code=404, detail="Данные не найдены")
         raise HTTPException(status_code=400, detail=code)
+
+
+@router.post("/{counterparty_id}/auto-tasks/{rule_id}/pause", response_model=CounterpartyAutoTaskRuleDto)
+def post_pause_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get_db)) -> CounterpartyAutoTaskRuleDto:
+    try:
+        return pause_auto_task_rule(db, counterparty_id, rule_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
+
+
+@router.post("/{counterparty_id}/auto-tasks/{rule_id}/resume", response_model=CounterpartyAutoTaskRuleDto)
+def post_resume_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get_db)) -> CounterpartyAutoTaskRuleDto:
+    try:
+        return resume_auto_task_rule(db, counterparty_id, rule_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
+
+
+@router.post("/{counterparty_id}/auto-tasks/{rule_id}/stop", response_model=CounterpartyAutoTaskRuleDto)
+def post_stop_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get_db)) -> CounterpartyAutoTaskRuleDto:
+    try:
+        return stop_auto_task_rule(db, counterparty_id, rule_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Правило не найдено")

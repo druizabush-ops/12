@@ -42,19 +42,20 @@ export type CounterpartyDto = {
 export type RuleDto = {
   id: number;
   counterparty_id: number;
+  task_kind: "MAKE_ORDER" | "SEND_ORDER";
+  title_template: string;
+  description_template: string | null;
+  assignee_user_ids: number[];
+  verifier_user_ids: number[] | null;
   is_enabled: boolean;
-  title: string;
-  kind: "order_request" | "custom";
-  schedule: {
-    recurrence_type: "daily" | "weekly" | "monthly" | "yearly";
-    recurrence_interval: number;
-    recurrence_days_of_week: number[];
-    recurrence_end_date: string;
-  };
-  primary_task: { assignee_user_id: number; text: string; due_time: string | null };
-  review_task: { enabled: boolean; assignee_user_id: number | null; text: string | null; due_time: string | null };
-  binding: { primary_master_task_id: string; review_master_task_id: string | null } | null;
+  schedule_weekday: number;
+  schedule_due_time: string | null;
+  horizon_days: number;
+  linked_task_master_id: string | null;
+  state: "active" | "paused" | "stopped";
 };
+
+export type CounterpartySettingsDto = { task_creator_user_id: number | null };
 
 export const getCounterpartyFolders = (token: string) => apiFetch<CounterpartyFolderDto[]>("/counterparties/folders", { method: "GET" }, token);
 export const createCounterpartyFolder = (token: string, payload: Partial<CounterpartyFolderDto>) =>
@@ -70,9 +71,19 @@ export const updateCounterparty = (token: string, id: number, payload: Partial<C
 export const archiveCounterparty = (token: string, id: number) => apiFetch<CounterpartyDto>(`/counterparties/${id}/archive`, { method: "POST" }, token);
 export const restoreCounterparty = (token: string, id: number) => apiFetch<CounterpartyDto>(`/counterparties/${id}/restore`, { method: "POST" }, token);
 
+export const getCounterpartySettings = (token: string) => apiFetch<CounterpartySettingsDto>("/counterparties/settings", { method: "GET" }, token);
+export const updateCounterpartySettings = (token: string, payload: CounterpartySettingsDto) =>
+  apiFetch<CounterpartySettingsDto>("/counterparties/settings", { method: "PATCH", body: JSON.stringify(payload) }, token);
+
 export const getAutoTaskRules = (token: string, counterpartyId: number) =>
-  apiFetch<RuleDto[]>(`/counterparties/${counterpartyId}/auto-task-rules`, { method: "GET" }, token);
+  apiFetch<RuleDto[]>(`/counterparties/${counterpartyId}/auto-tasks`, { method: "GET" }, token);
 export const createAutoTaskRule = (token: string, counterpartyId: number, payload: unknown) =>
-  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-task-rules`, { method: "POST", body: JSON.stringify(payload) }, token);
-export const updateAutoTaskRule = (token: string, counterpartyId: number, ruleId: number, payload: unknown) =>
-  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-task-rules/${ruleId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks`, { method: "POST", body: JSON.stringify(payload) }, token);
+export const updateAutoTaskRule = (token: string, counterpartyId: number, ruleId: number, payload: unknown, action?: "keep" | "replace") =>
+  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}${action ? `?action=${action}` : ""}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+export const pauseAutoTaskRule = (token: string, counterpartyId: number, ruleId: number) =>
+  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}/pause`, { method: "POST" }, token);
+export const resumeAutoTaskRule = (token: string, counterpartyId: number, ruleId: number) =>
+  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}/resume`, { method: "POST" }, token);
+export const stopAutoTaskRule = (token: string, counterpartyId: number, ruleId: number) =>
+  apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}/stop`, { method: "POST" }, token);
