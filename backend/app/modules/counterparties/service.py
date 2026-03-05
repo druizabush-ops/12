@@ -435,3 +435,14 @@ def stop_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> Coun
         master.recurrence_state = "stopped"
     db.commit()
     return _rule_to_dto(db, rule)
+
+
+def delete_auto_task_rule(db: Session, counterparty_id: int, rule_id: int) -> None:
+    rule = db.get(CounterpartyAutoTaskRule, rule_id)
+    if rule is None or rule.counterparty_id != counterparty_id:
+        raise ValueError("rule_not_found")
+    master = db.get(Task, rule.linked_task_master_id) if rule.linked_task_master_id else None
+    if master:
+        master.recurrence_state = "stopped"
+    db.delete(rule)
+    db.commit()

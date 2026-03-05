@@ -831,3 +831,29 @@ body {
   padding: 2px 8px;
   background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
+
+.counterparties-column {
+  border-right: 1px solid var(--border);
+  padding: 10px;
+  min-height: 76vh;
+}
+
+.counterparties-column:last-child {
+  border-right: none;
+}
+
+.counterparties-column-title {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.counterparty-toast {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}

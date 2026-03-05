@@ -20,6 +20,7 @@ from app.modules.counterparties.schemas import (
 from app.modules.counterparties.service import (
     archive_counterparty,
     create_auto_task_rule,
+    delete_auto_task_rule,
     create_counterparty,
     create_folder,
     get_counterparty_dto,
@@ -142,6 +143,14 @@ def patch_rule(
         if code in {"counterparty_not_found", "rule_not_found"}:
             raise HTTPException(status_code=404, detail="Данные не найдены")
         raise HTTPException(status_code=400, detail=code)
+
+
+@router.delete("/{counterparty_id}/auto-tasks/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rule(counterparty_id: int, rule_id: int, db: Session = Depends(get_db)) -> None:
+    try:
+        delete_auto_task_rule(db, counterparty_id, rule_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Правило не найдено")
 
 
 @router.post("/{counterparty_id}/auto-tasks/{rule_id}/pause", response_model=CounterpartyAutoTaskRuleDto)

@@ -87,3 +87,5 @@ export const resumeAutoTaskRule = (token: string, counterpartyId: number, ruleId
   apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}/resume`, { method: "POST" }, token);
 export const stopAutoTaskRule = (token: string, counterpartyId: number, ruleId: number) =>
   apiFetch<RuleDto>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}/stop`, { method: "POST" }, token);
+export const deleteAutoTaskRule = (token: string, counterpartyId: number, ruleId: number) =>
+  apiFetch<void>(`/counterparties/${counterpartyId}/auto-tasks/${ruleId}`, { method: "DELETE" }, token);

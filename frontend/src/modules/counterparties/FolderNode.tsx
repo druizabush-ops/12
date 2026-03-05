@@ -21,8 +21,8 @@ const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelec
       style={{
         paddingLeft: depth * 14,
         borderRadius: 10,
-        background: isOver ? "var(--accent-soft)" : "transparent",
-        border: `1px solid ${isOver ? "var(--accent)" : "transparent"}`,
+        background: isOver || isSelected ? "var(--accent-soft)" : "transparent",
+        border: `1px solid ${isOver || isSelected ? "var(--accent)" : "transparent"}`,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

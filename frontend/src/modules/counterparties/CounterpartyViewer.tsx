@@ -11,6 +11,11 @@ type CounterpartyViewerProps = {
 
 const rowStyle = { display: "grid", gridTemplateColumns: "220px 1fr", gap: 8 };
 
+const weekdayMap: Record<number, string> = { 1: "ПН", 2: "ВТ", 3: "СР", 4: "ЧТ", 5: "ПТ", 6: "СБ", 7: "ВС" };
+
+const formatWeekday = (value: number | null | undefined) => (value ? weekdayMap[value] ?? String(value) : null);
+const formatTime = (value: string | null | undefined) => (value ? value.slice(0, 5) : null);
+
 const renderValue = (value: string | number | null | undefined) => {
   if (value === null || value === undefined || value === "") return <span style={{ color: "var(--text-secondary)" }}>—</span>;
   return <span>{value}</span>;
@@ -54,9 +59,9 @@ const CounterpartyViewer = ({ counterparty, folders, cardColor, onEdit, onToggle
       </ViewerSection>
 
       <ViewerSection title="Логистика">
-        <div style={rowStyle}><strong>День заявки</strong>{renderValue(counterparty.order_day_of_week)}</div>
-        <div style={rowStyle}><strong>Дедлайн заявки</strong>{renderValue(counterparty.order_deadline_time)}</div>
-        <div style={rowStyle}><strong>День доставки</strong>{renderValue(counterparty.delivery_day_of_week)}</div>
+        <div style={rowStyle}><strong>День заявки</strong>{renderValue(formatWeekday(counterparty.order_day_of_week))}</div>
+        <div style={rowStyle}><strong>Время заявки</strong>{renderValue(formatTime(counterparty.order_deadline_time))}</div>
+        <div style={rowStyle}><strong>День доставки</strong>{renderValue(formatWeekday(counterparty.delivery_day_of_week))}</div>
       </ViewerSection>
     </section>
   );

@@ -191,35 +191,47 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
       />
 
       <DndContext onDragEnd={(event) => void onDragEnd(event)}>
-        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 1fr 320px", gap: 12, alignItems: "start" }}>
-          <CounterpartiesTree
-            folders={folders}
-            rootFolderId={rootFolderId}
-            selectedFolderId={selectedFolderId}
-            expandedFolders={expandedFolders}
-            onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
-            onSelectFolder={(folderId) => {
-              setSelectedFolderId(folderId);
-              setSelectedCounterpartyId(null);
-            }}
-          />
-          <FolderCounterpartiesList
-            items={selectedFolderCounterparties}
-            selectedCounterpartyId={selectedCounterpartyId}
-            onSelect={(counterpartyId) => setSelectedCounterpartyId(counterpartyId)}
-          />
-          <CounterpartyViewer
-            counterparty={selectedCounterparty}
-            folders={folders}
-            cardColor={selectedCounterparty ? cardColors[selectedCounterparty.id] ?? null : null}
-            onEdit={() => {
-              if (!selectedCounterparty) return;
-              setEditingCounterparty(selectedCounterparty);
-              setShowCounterpartyModal(true);
-            }}
-            onToggleArchive={() => void toggleArchive()}
-          />
-          <AutoTasksPanel counterparty={selectedCounterparty} />
+        <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 1fr 320px", gap: 0, alignItems: "start" }}>
+          <section className="counterparties-column" style={{ background: "var(--bg-secondary)" }}>
+            <p className="counterparties-column-title">Папки</p>
+            <CounterpartiesTree
+              folders={folders}
+              rootFolderId={rootFolderId}
+              selectedFolderId={selectedFolderId}
+              expandedFolders={expandedFolders}
+              onToggleFolder={(folderId) => setExpandedFolders((prev) => ({ ...prev, [folderId]: !prev[folderId] }))}
+              onSelectFolder={(folderId) => {
+                setSelectedFolderId(folderId);
+                setSelectedCounterpartyId(null);
+              }}
+            />
+          </section>
+          <section className="counterparties-column" style={{ background: "var(--bg-surface-2)" }}>
+            <p className="counterparties-column-title">Содержимое</p>
+            <FolderCounterpartiesList
+              items={selectedFolderCounterparties}
+              selectedCounterpartyId={selectedCounterpartyId}
+              onSelect={(counterpartyId) => setSelectedCounterpartyId(counterpartyId)}
+            />
+          </section>
+          <section className="counterparties-column" style={{ background: "var(--bg-secondary)" }}>
+            <p className="counterparties-column-title">Карточка</p>
+            <CounterpartyViewer
+              counterparty={selectedCounterparty}
+              folders={folders}
+              cardColor={selectedCounterparty ? cardColors[selectedCounterparty.id] ?? null : null}
+              onEdit={() => {
+                if (!selectedCounterparty) return;
+                setEditingCounterparty(selectedCounterparty);
+                setShowCounterpartyModal(true);
+              }}
+              onToggleArchive={() => void toggleArchive()}
+            />
+          </section>
+          <section className="counterparties-column" style={{ background: "var(--bg-surface-2)" }}>
+            <p className="counterparties-column-title">Автозадачи</p>
+            <AutoTasksPanel counterparty={selectedCounterparty} />
+          </section>
         </div>
       </DndContext>
 

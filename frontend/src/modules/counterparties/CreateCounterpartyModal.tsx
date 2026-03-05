@@ -11,6 +11,16 @@ type CreateCounterpartyModalProps = {
   onSubmit: (payload: Partial<CounterpartyDto>, cardColor: string | null) => Promise<void>;
 };
 
+const weekDayOptions = [
+  { value: 1, label: "ПН" },
+  { value: 2, label: "ВТ" },
+  { value: 3, label: "СР" },
+  { value: 4, label: "ЧТ" },
+  { value: 5, label: "ПТ" },
+  { value: 6, label: "СБ" },
+  { value: 7, label: "ВС" },
+];
+
 const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardColor, onClose, onSubmit }: CreateCounterpartyModalProps) => {
   const [form, setForm] = useState<Partial<CounterpartyDto>>({
     folder_id: initial?.folder_id ?? rootFolderId,
@@ -26,7 +36,7 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
     login: initial?.login ?? "",
     password: initial?.password ?? "",
     order_day_of_week: initial?.order_day_of_week ?? null,
-    order_deadline_time: initial?.order_deadline_time ?? "",
+    order_deadline_time: initial?.order_deadline_time?.slice(0, 5) ?? "",
     delivery_day_of_week: initial?.delivery_day_of_week ?? null,
     defect_notes: initial?.defect_notes ?? "",
     status: initial?.status ?? "active",
@@ -66,9 +76,18 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
           <input placeholder="Email" value={form.email ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
           <input placeholder="Сайт" value={form.website ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
           <input placeholder="Мессенджер" value={form.messenger ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, messenger: e.target.value }))} />
-          <input type="number" min={1} max={7} placeholder="День заявки" value={form.order_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
-          <input placeholder="Дедлайн заявки (HH:MM:SS)" value={form.order_deadline_time ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value }))} />
-          <input type="number" min={1} max={7} placeholder="День доставки" value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
+          <select value={form.order_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_day_of_week: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">День заявки</option>
+            {weekDayOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="time" value={form.order_deadline_time ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value }))} style={{ flex: 1 }} />
+            <button type="button" className="ghost-button" onClick={() => setForm((prev) => ({ ...prev, order_deadline_time: "" }))}>Очистить</button>
+          </div>
+          <select value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">День доставки</option>
+            {weekDayOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
         </div>
         <div className="admin-modal-actions">
           <button type="submit" className="primary-button">Сохранить</button>

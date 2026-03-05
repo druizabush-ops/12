@@ -16,8 +16,8 @@ const RootNode = ({ isSelected, onSelect }: RootNodeProps) => {
       style={{
         justifyContent: "flex-start",
         fontWeight: isSelected ? 700 : 500,
-        background: isOver ? "var(--accent-soft)" : "transparent",
-        borderColor: isOver ? "var(--accent)" : "var(--border)",
+        background: isOver || isSelected ? "var(--accent-soft)" : "transparent",
+        borderColor: isOver || isSelected ? "var(--accent)" : "var(--border)",
       }}
       onClick={onSelect}
     >
