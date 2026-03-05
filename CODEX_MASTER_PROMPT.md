@@ -295,6 +295,20 @@ Collapsed режим:
 Риски/заметки:
 
 
+
+### [2026-03-05] — codex/polish-counterparties-autotasks-ux-v1.1
+Добавлено:
+- API удаления правила автозадач: DELETE /counterparties/{counterparty_id}/auto-tasks/{rule_id} c ответом 204 No Content без response body.
+- Frontend AutoTasks UX v1.1: карточки правил в стиле Tasks, иконки действий edit/pause/resume/stop/delete, confirm при удалении, inline status-бейджи 🟢/🟡/⚫.
+Изменено:
+- Сервис counterparties: soft-delete правила через state="deleted", исключение deleted из list/операций, остановка master recurring при delete с очисткой будущих неделанных дочерних задач.
+- Frontend форма автоправил: time picker с очисткой, дни недели ПН..ВС, 4 визуально разделённые колонки, loading + toast + refetch после операций.
+- Общий apiFetch: корректная обработка 204 и non-JSON ответов без падения response.json().
+Причина:
+- Устранить регрессию FastAPI/HTTP 204 и довести UX управления автоправилами контрагентов до рабочего состояния без ручных точечных правок.
+Риски/заметки:
+- Полная проверка alembic upgrade head требует PostgreSQL; в SQLite окружении часть старых миграций (0008) не поддерживается из-за ограничений ALTER CONSTRAINT.
+
 ### [2026-03-05] — counterparties-autotasks-v1
 Добавлено:
 - Counterparties AutoTasks v1: отдельные правила MAKE_ORDER/SEND_ORDER, rolling ensure горизонта 15 дней без cron, источники задач source_module/source_counterparty_id/source_trigger_id.

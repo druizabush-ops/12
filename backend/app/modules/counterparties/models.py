@@ -10,7 +10,7 @@ from app.db.base import Base
 
 CounterpartyStatus = Literal["active", "inactive"]
 CounterpartyAutoTaskKind = Literal["MAKE_ORDER", "SEND_ORDER"]
-CounterpartyAutoTaskState = Literal["active", "paused", "stopped"]
+CounterpartyAutoTaskState = Literal["active", "paused", "stopped", "deleted"]
 
 
 class CounterpartyFolder(Base):
