@@ -53,8 +53,7 @@ const CounterpartiesTree = ({
   };
 
   return (
-    <section className="admin-card" style={{ maxHeight: "74vh", overflow: "auto", display: "grid", gap: 4 }}>
-      <h3 style={{ margin: 0 }}>Папки</h3>
+    <section className="admin-card" style={{ display: "grid", gap: 4 }}>
       <RootNode isSelected={selectedFolderId === rootFolderId} onSelect={() => onSelectFolder(rootFolderId)} />
       {renderFolders(rootFolderId, 1)}
     </section>
