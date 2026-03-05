@@ -11,14 +11,18 @@ type Props = {
 
 const DraggableRow = ({ item, isSelected, onSelect }: { item: CounterpartyDto; isSelected: boolean; onSelect: () => void }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useDraggable({ id: `counterparty-${item.id}` });
+  const isArchived = item.status === "archived" || item.is_archived;
+  const rowBackground = isSelected
+    ? "var(--accent-soft)"
+    : isArchived
+      ? "color-mix(in srgb, var(--danger) 12%, transparent)"
+      : "transparent";
 
   return (
-    <tr style={{ background: isSelected ? "var(--accent-soft)" : "transparent" }} onClick={onSelect}>
+    <tr style={{ background: rowBackground, color: isArchived ? "var(--danger)" : "inherit" }} onClick={onSelect}>
       <td style={{ padding: "8px 6px" }}>
         <span ref={setNodeRef} {...attributes} {...listeners} style={{ transform: CSS.Transform.toString(transform), transition, cursor: "grab" }}>⋮⋮</span> {item.name}
       </td>
-      <td>{item.city || "—"}</td>
-      <td>{item.phone || "—"}</td>
       <td>{item.status}</td>
     </tr>
   );
@@ -33,8 +37,6 @@ const FolderCounterpartiesList = ({ items, selectedCounterpartyId, onSelect }: P
         <thead>
           <tr>
             <th align="left">Наименование</th>
-            <th align="left">Город</th>
-            <th align="left">Телефон</th>
             <th align="left">Статус</th>
           </tr>
         </thead>

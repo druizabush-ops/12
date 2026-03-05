@@ -10,15 +10,29 @@ type CounterpartyViewerProps = {
 };
 
 const rowStyle = { display: "grid", gridTemplateColumns: "220px 1fr", gap: 8 };
+const weekDays: Record<number, string> = {
+  1: "ПН",
+  2: "ВТ",
+  3: "СР",
+  4: "ЧТ",
+  5: "ПТ",
+  6: "СБ",
+  7: "ВС",
+};
 
 const renderValue = (value: string | number | null | undefined) => {
   if (value === null || value === undefined || value === "") return <span style={{ color: "var(--text-secondary)" }}>—</span>;
   return <span>{value}</span>;
 };
 
+const renderWeekDay = (value: number | null | undefined) => {
+  if (!value) return renderValue(null);
+  return renderValue(weekDays[value] ?? value);
+};
+
 const ViewerSection = ({ title, children }: { title: string; children: ReactNode }) => (
   <article className="admin-card" style={{ display: "grid", gap: 10 }}>
-    <h4 style={{ margin: 0 }}>{title}</h4>
+    <h4 style={{ margin: 0, color: "var(--accent)", borderBottom: "1px solid var(--accent)", paddingBottom: 4 }}>{title}</h4>
     <div style={{ display: "grid", gap: 8 }}>{children}</div>
   </article>
 );
@@ -54,9 +68,9 @@ const CounterpartyViewer = ({ counterparty, folders, cardColor, onEdit, onToggle
       </ViewerSection>
 
       <ViewerSection title="Логистика">
-        <div style={rowStyle}><strong>День заявки</strong>{renderValue(counterparty.order_day_of_week)}</div>
+        <div style={rowStyle}><strong>День заявки</strong>{renderWeekDay(counterparty.order_day_of_week)}</div>
         <div style={rowStyle}><strong>Дедлайн заявки</strong>{renderValue(counterparty.order_deadline_time)}</div>
-        <div style={rowStyle}><strong>День доставки</strong>{renderValue(counterparty.delivery_day_of_week)}</div>
+        <div style={rowStyle}><strong>День доставки</strong>{renderWeekDay(counterparty.delivery_day_of_week)}</div>
       </ViewerSection>
     </section>
   );

@@ -11,6 +11,18 @@ type CreateCounterpartyModalProps = {
   onSubmit: (payload: Partial<CounterpartyDto>, cardColor: string | null) => Promise<void>;
 };
 
+const weekDayOptions = [
+  { value: 1, label: "ПН" },
+  { value: 2, label: "ВТ" },
+  { value: 3, label: "СР" },
+  { value: 4, label: "ЧТ" },
+  { value: 5, label: "ПТ" },
+  { value: 6, label: "СБ" },
+  { value: 7, label: "ВС" },
+];
+
+const toTimeInputValue = (value: string | null | undefined) => (value ? value.slice(0, 5) : "");
+
 const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardColor, onClose, onSubmit }: CreateCounterpartyModalProps) => {
   const [form, setForm] = useState<Partial<CounterpartyDto>>({
     folder_id: initial?.folder_id ?? rootFolderId,
@@ -32,6 +44,13 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
     status: initial?.status ?? "active",
   });
   const [cardColor, setCardColor] = useState<string>(initialCardColor ?? "");
+
+  const openTimePicker = () => {
+    const input = document.getElementById("counterparty-order-deadline") as HTMLInputElement | null;
+    if (!input) return;
+    if (typeof input.showPicker === "function") input.showPicker();
+    else input.focus();
+  };
 
   const title = useMemo(() => (initial?.id ? "Редактировать контрагента" : "Создать контрагента"), [initial?.id]);
 
@@ -66,9 +85,24 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
           <input placeholder="Email" value={form.email ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))} />
           <input placeholder="Сайт" value={form.website ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, website: e.target.value }))} />
           <input placeholder="Мессенджер" value={form.messenger ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, messenger: e.target.value }))} />
-          <input type="number" min={1} max={7} placeholder="День заявки" value={form.order_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
-          <input placeholder="Дедлайн заявки (HH:MM:SS)" value={form.order_deadline_time ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value }))} />
-          <input type="number" min={1} max={7} placeholder="День доставки" value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))} />
+          <select value={form.order_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, order_day_of_week: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">День заявки</option>
+            {weekDayOptions.map((item) => <option key={`order-${item.value}`} value={item.value}>{item.label}</option>)}
+          </select>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+            <input
+              id="counterparty-order-deadline"
+              type="time"
+              step={60}
+              value={toTimeInputValue(form.order_deadline_time)}
+              onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value ? `${e.target.value}:00` : "" }))}
+            />
+            <button type="button" className="ghost-button" onClick={openTimePicker} title="Открыть выбор времени" aria-label="Открыть выбор времени">🕒</button>
+          </div>
+          <select value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))}>
+            <option value="">День доставки</option>
+            {weekDayOptions.map((item) => <option key={`delivery-${item.value}`} value={item.value}>{item.label}</option>)}
+          </select>
         </div>
         <div className="admin-modal-actions">
           <button type="submit" className="primary-button">Сохранить</button>
