@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 from typing import Literal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Time
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Time
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
 CounterpartyStatus = Literal["active", "inactive"]
-CounterpartyAutoTaskKind = Literal["order_request", "custom"]
+CounterpartyAutoTaskKind = Literal["MAKE_ORDER", "SEND_ORDER"]
+CounterpartyAutoTaskState = Literal["active", "paused", "stopped"]
 
 
 class CounterpartyFolder(Base):
@@ -71,34 +72,36 @@ class CounterpartyAutoTaskRule(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     counterparty_id: Mapped[int] = mapped_column(Integer, ForeignKey("counterparties.id", ondelete="CASCADE"), nullable=False)
+    task_kind: Mapped[CounterpartyAutoTaskKind] = mapped_column(String(32), nullable=False)
+    title_template: Mapped[str] = mapped_column(String(255), nullable=False)
+    description_template: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    kind: Mapped[CounterpartyAutoTaskKind] = mapped_column(String(32), nullable=False, default="order_request")
-
-    recurrence_type: Mapped[str] = mapped_column(String(32), nullable=False)
-    recurrence_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    recurrence_days_of_week: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    recurrence_end_date: Mapped[date] = mapped_column(Date, nullable=False)
-
-    primary_assignee_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("auth_users.id", ondelete="RESTRICT"), nullable=False)
-    primary_text: Mapped[str] = mapped_column(Text, nullable=False)
-    primary_due_time: Mapped[time | None] = mapped_column(Time, nullable=True)
-
-    review_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    review_assignee_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("auth_users.id", ondelete="RESTRICT"), nullable=True)
-    review_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    review_due_time: Mapped[time | None] = mapped_column(Time, nullable=True)
-
+    schedule_weekday: Mapped[int] = mapped_column(Integer, nullable=False)
+    schedule_due_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    horizon_days: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    linked_task_master_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
+    state: Mapped[CounterpartyAutoTaskState] = mapped_column(String(16), nullable=False, default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
-class CounterpartyAutoTaskBinding(Base):
-    __tablename__ = "counterparty_auto_task_bindings"
+class CounterpartyAutoTaskRuleAssignee(Base):
+    __tablename__ = "counterparty_auto_task_rule_assignees"
+
+    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("counterparty_auto_task_rules.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("auth_users.id", ondelete="CASCADE"), primary_key=True)
+
+
+class CounterpartyAutoTaskRuleVerifier(Base):
+    __tablename__ = "counterparty_auto_task_rule_verifiers"
+
+    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("counterparty_auto_task_rules.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("auth_users.id", ondelete="CASCADE"), primary_key=True)
+
+
+class CounterpartyModuleSettings(Base):
+    __tablename__ = "counterparty_module_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("counterparty_auto_task_rules.id", ondelete="CASCADE"), nullable=False, unique=True)
-    primary_master_task_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
-    review_master_task_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    task_creator_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("auth_users.id", ondelete="SET NULL"), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
