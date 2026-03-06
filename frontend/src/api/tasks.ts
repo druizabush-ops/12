@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, buildUrl } from "./client";
 
 export type TaskDto = {
   id: string;
@@ -102,3 +102,60 @@ export const deleteRecurringChildren = (
 
 export const getTaskById = (token: string, id: string) =>
   apiFetch<TaskDto>(`/tasks/${id}`, { method: "GET" }, token);
+
+const TOKEN_STORAGE_KEY = "auth_token";
+
+const getStoredToken = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY);
+};
+
+const fetchTasksAdminBlob = async (path: string, pin: string) => {
+  const token = getStoredToken();
+  const response = await fetch(buildUrl(path), {
+    method: "GET",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "X-Tasks-Admin-Pin": pin,
+    },
+  });
+  if (!response.ok) {
+    throw new Error((await response.text()) || "Ошибка загрузки файла");
+  }
+  return response.blob();
+};
+
+export const downloadTasksTemplate = (pin: string) =>
+  fetchTasksAdminBlob("/tasks/admin/template", pin);
+
+export const exportTasksExcel = (pin: string) =>
+  fetchTasksAdminBlob("/tasks/admin/export", pin);
+
+export const importTasksExcel = async (pin: string, file: File) => {
+  const token = getStoredToken();
+  const formData = new FormData();
+  formData.append("mode", "upsert");
+  formData.append("file", file);
+
+  const response = await fetch(buildUrl("/tasks/admin/import"), {
+    method: "POST",
+    body: formData,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      "X-Tasks-Admin-Pin": pin,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error((await response.text()) || "Ошибка импорта");
+  }
+
+  return (await response.json()) as {
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: number; message: string }>;
+  };
+};

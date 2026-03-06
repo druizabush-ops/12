@@ -831,3 +831,46 @@ body {
   padding: 2px 8px;
   background: color-mix(in srgb, var(--accent) 20%, transparent);
 }
+
+.tasks-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tasks-admin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tasks-admin-modal {
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.tasks-import-help {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.tasks-import-help h4 {
+  margin: 0 0 8px;
+}
+
+.tasks-import-help ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.tasks-import-result {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}

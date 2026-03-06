@@ -4,7 +4,7 @@
 const FALLBACK_BASE_URL = "http://127.0.0.1:8000";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? FALLBACK_BASE_URL;
 
-const buildUrl = (path: string) => {
+export const buildUrl = (path: string) => {
   if (path.startsWith("http")) {
     return path;
   }

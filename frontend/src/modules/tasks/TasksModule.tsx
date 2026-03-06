@@ -7,10 +7,13 @@ import {
   createTask,
   deleteRecurringChildren,
   deleteTask,
+  downloadTasksTemplate,
+  exportTasksExcel,
   getBadges,
   getTaskById,
   getTasksByDate,
   getUsers,
+  importTasksExcel,
   returnActive,
   updateTask,
   verifyTask,
@@ -29,6 +32,7 @@ const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMon
 type TaskTab = "assigned" | "verify" | "created";
 
 type CalendarCell = { date: Date; isCurrentMonth: boolean; isToday: boolean; isSelected: boolean };
+type AdminActionType = "template" | "export" | "import";
 
 const tabLabel = (tab: TaskTab) => {
   if (tab === "verify") return "На проверку";
@@ -74,6 +78,16 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState<string[]>([]);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [formError, setFormError] = useState("");
+  const [adminAction, setAdminAction] = useState<AdminActionType | null>(null);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [isAdminBusy, setIsAdminBusy] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: Array<{ row: number; message: string }>;
+  } | null>(null);
 
   const monthDays = useMemo(() => {
     const firstDayOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
@@ -301,6 +315,89 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     }
   };
 
+  const openAdminPinModal = (action: AdminActionType) => {
+    setAdminAction(action);
+    setAdminPin("");
+    setAdminError("");
+    setImportResult(null);
+  };
+
+  const closeAdminModal = () => {
+    setAdminAction(null);
+    setAdminPin("");
+    setAdminError("");
+    setImportResult(null);
+    setIsAdminBusy(false);
+  };
+
+  const downloadBlobFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const runAdminAction = async () => {
+    if (!adminAction || !adminPin.trim()) {
+      setAdminError("Введите PIN");
+      return;
+    }
+    setAdminError("");
+    setIsAdminBusy(true);
+    try {
+      if (adminAction === "template") {
+        const blob = await downloadTasksTemplate(adminPin.trim());
+        downloadBlobFile(blob, "tasks_template.xlsx");
+        closeAdminModal();
+        return;
+      }
+      if (adminAction === "export") {
+        const blob = await exportTasksExcel(adminPin.trim());
+        downloadBlobFile(blob, "tasks_export.xlsx");
+        closeAdminModal();
+        return;
+      }
+
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.accept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      picker.onchange = () => {
+        const file = picker.files?.[0];
+        if (!file) {
+          setIsAdminBusy(false);
+          return;
+        }
+        void importTasksExcel(adminPin.trim(), file)
+          .then(async (result) => {
+            setImportResult(result);
+            await loadTasks();
+            await loadBadges();
+          })
+          .catch((error: Error) => {
+            if (error.message.includes("Invalid admin PIN")) {
+              setAdminError("Неверный PIN");
+              return;
+            }
+            setAdminError("Не удалось импортировать файл");
+          })
+          .finally(() => setIsAdminBusy(false));
+      };
+      picker.click();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("Invalid admin PIN")) {
+        setAdminError("Неверный PIN");
+      } else {
+        setAdminError("Не удалось выполнить действие");
+      }
+      setIsAdminBusy(false);
+    }
+  };
+
   const renderTaskList = (items: TaskDto[], emptyText: string) => (
     <ul className="tasks-list">
       {items.length === 0 ? <li className="muted">{emptyText}</li> : null}
@@ -406,7 +503,14 @@ const TasksModule = (_: ModuleRuntimeProps) => {
 
   return (
     <div className="page tasks-page">
-      <div className="page-header"><h2>Задачи</h2></div>
+      <div className="page-header tasks-page-header">
+        <h2>Задачи</h2>
+        <div className="tasks-admin-actions">
+          <button type="button" className="secondary-button" onClick={() => openAdminPinModal("template")}>Скачать шаблон</button>
+          <button type="button" className="secondary-button" onClick={() => openAdminPinModal("export")}>Экспорт</button>
+          <button type="button" className="secondary-button" onClick={() => openAdminPinModal("import")}>Импорт</button>
+        </div>
+      </div>
       <div className="admin-tabs">
         {(["assigned", "verify", "created"] as TaskTab[]).map((tab) => (
           <button key={tab} type="button" className={taskTab === tab ? "primary-button" : "secondary-button"} onClick={() => setTaskTab(tab)}>
@@ -475,6 +579,64 @@ const TasksModule = (_: ModuleRuntimeProps) => {
               {detailsTask.is_recurring && !detailsTask.recurrence_master_task_id && (user?.id === detailsTask.created_by_user_id) ? <button type="button" className="ghost-button" onClick={() => void deleteRecurringChildren(token!, detailsTask.id, "all").then(async () => { await loadTasks(); await syncDetails(detailsTask.id); })}>Удалить children</button> : null}
             </div>
             <div className="admin-modal-actions"><button type="button" className="ghost-button" onClick={() => setDetailsTask(null)}>Закрыть</button></div>
+          </div>
+        </div>
+      ) : null}
+
+      {adminAction ? (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal tasks-admin-modal">
+            <h3>
+              {adminAction === "template" ? "Скачать шаблон" : adminAction === "export" ? "Экспорт задач" : "Импорт задач"}
+            </h3>
+            <p className="muted">Введите PIN администратора для продолжения.</p>
+            <input
+              type="password"
+              value={adminPin}
+              onChange={(event) => setAdminPin(event.target.value)}
+              placeholder="PIN"
+              autoFocus
+            />
+            {adminError ? <p className="form-error">{adminError}</p> : null}
+
+            {adminAction === "import" ? (
+              <div className="tasks-import-help">
+                <h4>Как работает импорт</h4>
+                <ul>
+                  <li>Импорт помогает массово создать новые задачи, обновить текущие или перенести их из Excel.</li>
+                  <li>Если указан существующий <code>id</code> — задача обновится. Если <code>id</code> пустой — создастся новая.</li>
+                  <li><strong>created_by_user_id</strong> обязателен. Если <code>assignee_user_ids</code> пустой, исполнителем станет создатель.</li>
+                  <li>Если <code>verifier_user_ids</code> пустой — задача будет без проверки.</li>
+                  <li><code>done_pending_verify</code> импортировать нельзя.</li>
+                  <li>Если <code>status = done</code>, поле <code>completed_at</code> обязательно.</li>
+                  <li>Повторяющиеся задачи импортируются как master; дочерние задачи создаёт программа автоматически.</li>
+                  <li>Форматы: <code>due_date = YYYY-MM-DD</code>, <code>due_time = HH:MM</code>, <code>completed_at = YYYY-MM-DD HH:MM</code>.</li>
+                  <li>Пользователей указывайте по ID; несколько ID — через запятую.</li>
+                  <li>Перед импортом: скачайте шаблон, заполните по примеру и только потом загружайте файл.</li>
+                </ul>
+                {importResult ? (
+                  <div className="tasks-import-result">
+                    <p>
+                      Создано: {importResult.created}, Обновлено: {importResult.updated}, Пропущено: {importResult.skipped}
+                    </p>
+                    {importResult.errors.length > 0 ? (
+                      <ul>
+                        {importResult.errors.map((item) => (
+                          <li key={`${item.row}-${item.message}`}>Строка {item.row}: {item.message}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="admin-modal-actions">
+              <button type="button" className="ghost-button" onClick={closeAdminModal}>Отмена</button>
+              <button type="button" className="primary-button" onClick={() => void runAdminAction()} disabled={isAdminBusy}>
+                {isAdminBusy ? "Выполняется..." : "Продолжить"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
