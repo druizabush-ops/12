@@ -11,6 +11,7 @@ type CounterpartiesTreeProps = {
   expandedFolders: Record<number, boolean>;
   onToggleFolder: (folderId: number) => void;
   onSelectFolder: (folderId: number) => void;
+  onDeleteFolder: (folderId: number) => void;
 };
 
 const CounterpartiesTree = ({
@@ -19,7 +20,8 @@ const CounterpartiesTree = ({
   selectedFolderId,
   expandedFolders,
   onToggleFolder,
-  onSelectFolder
+  onSelectFolder,
+  onDeleteFolder,
 }: CounterpartiesTreeProps) => {
   const folderByParent = useMemo(() => {
     const map = new Map<number, CounterpartyFolderDto[]>();
@@ -46,6 +48,7 @@ const CounterpartiesTree = ({
           isExpanded={isExpanded}
           onToggle={() => onToggleFolder(folder.id)}
           onSelect={() => onSelectFolder(folder.id)}
+          onDelete={() => onDeleteFolder(folder.id)}
         />,
         ...(isExpanded ? renderFolders(folder.id, depth + 1) : []),
       ];

@@ -7,6 +7,7 @@ import {
   CounterpartyFolderDto,
   createCounterparty,
   createCounterpartyFolder,
+  deleteCounterpartyFolder,
   getCounterparties,
   getCounterpartyFolders,
   restoreCounterparty,
@@ -112,6 +113,22 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
     await loadAll();
   };
 
+  const removeFolder = async (folderId: number) => {
+    if (!token || !rootFolderId || folderId === rootFolderId) return;
+    if (!window.confirm("Удалить выбранную папку?")) return;
+    try {
+      await deleteCounterpartyFolder(token, folderId);
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId(rootFolderId);
+        setSelectedCounterpartyId(null);
+      }
+      await loadAll();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось удалить папку";
+      window.alert(message);
+    }
+  };
+
   const submitCounterparty = async (payload: Partial<CounterpartyDto>, cardColor: string | null) => {
     if (!token || !rootFolderId) return;
     const safePayload = { ...payload, folder_id: payload.folder_id ?? rootFolderId };
@@ -208,6 +225,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
                   setSelectedFolderId(folderId);
                   setSelectedCounterpartyId(null);
                 }}
+                onDeleteFolder={(folderId) => void removeFolder(folderId)}
               />
             </div>
           </div>

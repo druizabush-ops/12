@@ -9,9 +9,10 @@ type FolderNodeProps = {
   isExpanded: boolean;
   onToggle: () => void;
   onSelect: () => void;
+  onDelete: () => void;
 };
 
-const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelect }: FolderNodeProps) => {
+const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelect, onDelete }: FolderNodeProps) => {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id });
   const { attributes, listeners, setNodeRef: setDragRef, transform, transition } = useDraggable({ id });
 
@@ -30,6 +31,7 @@ const FolderNode = ({ id, depth, name, isSelected, isExpanded, onToggle, onSelec
         <button type="button" className="ghost-button" onClick={onSelect} style={{ fontWeight: isSelected ? 700 : 500 }}>
           📁 {name}
         </button>
+        <button type="button" className="ghost-button" onClick={onDelete} title="Удалить папку" aria-label="Удалить папку">🗑️</button>
         <span
           ref={setDragRef}
           {...attributes}

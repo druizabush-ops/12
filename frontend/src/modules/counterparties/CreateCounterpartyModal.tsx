@@ -45,13 +45,6 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
   });
   const [cardColor, setCardColor] = useState<string>(initialCardColor ?? "");
 
-  const openTimePicker = () => {
-    const input = document.getElementById("counterparty-order-deadline") as HTMLInputElement | null;
-    if (!input) return;
-    if (typeof input.showPicker === "function") input.showPicker();
-    else input.focus();
-  };
-
   const title = useMemo(() => (initial?.id ? "Редактировать контрагента" : "Создать контрагента"), [initial?.id]);
 
   const submit = async (event: FormEvent) => {
@@ -89,16 +82,13 @@ const CreateCounterpartyModal = ({ folders, rootFolderId, initial, initialCardCo
             <option value="">День заявки</option>
             {weekDayOptions.map((item) => <option key={`order-${item.value}`} value={item.value}>{item.label}</option>)}
           </select>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-            <input
-              id="counterparty-order-deadline"
-              type="time"
-              step={60}
-              value={toTimeInputValue(form.order_deadline_time)}
-              onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value ? `${e.target.value}:00` : "" }))}
-            />
-            <button type="button" className="ghost-button" onClick={openTimePicker} title="Открыть выбор времени" aria-label="Открыть выбор времени">🕒</button>
-          </div>
+          <input
+            id="counterparty-order-deadline"
+            type="time"
+            step={60}
+            value={toTimeInputValue(form.order_deadline_time)}
+            onChange={(e) => setForm((prev) => ({ ...prev, order_deadline_time: e.target.value ? `${e.target.value}:00` : "" }))}
+          />
           <select value={form.delivery_day_of_week ?? ""} onChange={(e) => setForm((prev) => ({ ...prev, delivery_day_of_week: e.target.value ? Number(e.target.value) : null }))}>
             <option value="">День доставки</option>
             {weekDayOptions.map((item) => <option key={`delivery-${item.value}`} value={item.value}>{item.label}</option>)}
