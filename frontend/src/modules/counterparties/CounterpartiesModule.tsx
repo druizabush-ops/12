@@ -26,6 +26,7 @@ import FolderCounterpartiesList from "./FolderCounterpartiesList";
 const ROOT_NAME = "Каталог";
 const columnHeaderStyle = { fontWeight: 600, fontSize: 14, marginBottom: 8 };
 const columnShellStyle = { display: "flex", flexDirection: "column" as const, minHeight: 0, overflow: "hidden", padding: "0 10px" };
+const borderedColumnStyle = { ...columnShellStyle, borderRight: "1px solid var(--border)" };
 
 const CounterpartiesModule = (_: ModuleRuntimeProps) => {
   const { token } = useAuth();
@@ -194,7 +195,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
 
       <DndContext onDragEnd={(event) => void onDragEnd(event)}>
         <div style={{ display: "grid", gridTemplateColumns: "260px 340px minmax(0, 1fr) 340px", alignItems: "stretch", border: "1px solid var(--border)", borderRadius: 12, minHeight: "74vh" }}>
-          <div style={columnShellStyle}>
+          <div style={borderedColumnStyle}>
             <div style={columnHeaderStyle}>Папки</div>
             <div style={{ minHeight: 0, overflow: "auto" }}>
               <CounterpartiesTree
@@ -211,7 +212,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
             </div>
           </div>
 
-          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+          <div style={borderedColumnStyle}>
             <div style={columnHeaderStyle}>Контрагенты</div>
             <div style={{ minHeight: 0, overflow: "auto" }}>
               <FolderCounterpartiesList
@@ -222,7 +223,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
             </div>
           </div>
 
-          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+          <div style={borderedColumnStyle}>
             <div style={columnHeaderStyle}>Карточка</div>
             <div style={{ minHeight: 0, overflow: "auto" }}>
               <CounterpartyViewer
@@ -239,7 +240,7 @@ const CounterpartiesModule = (_: ModuleRuntimeProps) => {
             </div>
           </div>
 
-          <div style={{ ...columnShellStyle, borderLeft: "1px solid var(--border)" }}>
+          <div style={columnShellStyle}>
             <div style={columnHeaderStyle}>Автозадачи</div>
             <div style={{ minHeight: 0, overflow: "auto" }}>
               <AutoTasksPanel counterparty={selectedCounterparty} />
