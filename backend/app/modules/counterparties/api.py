@@ -21,8 +21,9 @@ from app.modules.counterparties.service import (
     archive_counterparty,
     create_auto_task_rule,
     create_counterparty,
-    delete_auto_task_rule,
     create_folder,
+    delete_auto_task_rule,
+    delete_folder,
     get_counterparty_dto,
     get_task_creator_settings,
     list_auto_task_rules,
@@ -66,6 +67,20 @@ def patch_folder(folder_id: int, payload: CounterpartyFolderUpdatePayload, db: S
         return update_folder(db, folder_id, payload)
     except ValueError:
         raise HTTPException(status_code=404, detail="Папка не найдена")
+
+
+@router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_folder(folder_id: int, db: Session = Depends(get_db)) -> Response:
+    try:
+        delete_folder(db, folder_id)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "folder_not_found":
+            raise HTTPException(status_code=404, detail="Папка не найдена")
+        if code == "folder_not_empty":
+            raise HTTPException(status_code=400, detail="Нельзя удалить папку, пока в ней есть контрагенты или вложенные элементы")
+        raise HTTPException(status_code=400, detail=code)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("", response_model=list[CounterpartyDto])

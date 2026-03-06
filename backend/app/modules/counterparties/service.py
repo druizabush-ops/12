@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.modules.counterparties.models import (
@@ -53,7 +53,10 @@ def _folder_to_dto(folder: CounterpartyFolder) -> CounterpartyFolderDto:
 
 
 def _counterparty_to_dto(item: Counterparty) -> CounterpartyDto:
-    return CounterpartyDto.model_validate(item, from_attributes=True)
+    payload = CounterpartyDto.model_validate(item, from_attributes=True).model_dump()
+    if item.is_archived:
+        payload["status"] = "archived"
+    return CounterpartyDto.model_validate(payload)
 
 
 def _rule_to_dto(db: Session, rule: CounterpartyAutoTaskRule, effective_state: str | None = None) -> CounterpartyAutoTaskRuleDto:
@@ -246,10 +249,25 @@ def archive_counterparty(db: Session, counterparty_id: int, archived: bool) -> C
     if item is None:
         raise ValueError("counterparty_not_found")
     item.is_archived = archived
+    item.status = "archived" if archived else "active"
     item.updated_at = _now()
     db.commit()
     db.refresh(item)
     return _counterparty_to_dto(item)
+
+
+def delete_folder(db: Session, folder_id: int) -> None:
+    folder = db.get(CounterpartyFolder, folder_id)
+    if folder is None:
+        raise ValueError("folder_not_found")
+
+    has_children = db.scalar(select(func.count()).select_from(CounterpartyFolder).where(CounterpartyFolder.parent_id == folder_id)) or 0
+    has_counterparties = db.scalar(select(func.count()).select_from(Counterparty).where(Counterparty.folder_id == folder_id)) or 0
+    if has_children > 0 or has_counterparties > 0:
+        raise ValueError("folder_not_empty")
+
+    db.delete(folder)
+    db.commit()
 
 
 def get_task_creator_settings(db: Session) -> CounterpartyTaskCreatorSettingsDto:

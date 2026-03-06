@@ -119,23 +119,31 @@ const AutoTasksPanel = ({ counterparty }: Props) => {
     event.preventDefault();
     if (!token) return;
 
+    if (creatorUserId === null) {
+      showToast("error", "Выберите автора задачи");
+      return;
+    }
+
     if (editingRuleId) {
       await runAction(
-        () =>
-          updateAutoTaskRule(token, counterparty.id, editingRuleId, {
+        async () => {
+          await updateCounterpartySettings(token, { task_creator_user_id: creatorUserId });
+          return updateAutoTaskRule(token, counterparty.id, editingRuleId, {
             task_kind: kind,
             title_template: titleTemplate,
             assignee_user_ids: assignees,
             schedule_weekday: weekday,
             schedule_due_time: dueTime || null,
-          }),
+          });
+        },
         "Правило обновлено",
         editingRuleId,
       );
     } else {
       await runAction(
-        () =>
-          createAutoTaskRule(token, counterparty.id, {
+        async () => {
+          await updateCounterpartySettings(token, { task_creator_user_id: creatorUserId });
+          return createAutoTaskRule(token, counterparty.id, {
             task_kind: kind,
             title_template: titleTemplate,
             assignee_user_ids: assignees,
@@ -144,7 +152,8 @@ const AutoTasksPanel = ({ counterparty }: Props) => {
             schedule_weekday: weekday,
             schedule_due_time: dueTime || null,
             horizon_days: 15,
-          }),
+          });
+        },
         "Правило создано",
       );
     }
@@ -157,17 +166,6 @@ const AutoTasksPanel = ({ counterparty }: Props) => {
     <section style={{ display: "grid", gap: 10 }}>
       {toast ? <div className={toast.kind === "success" ? "task-badge task-badge-success" : "task-badge task-badge-danger"}>{toast.text}</div> : null}
       {isBusy ? <div className="task-badge">Загрузка...</div> : null}
-
-      <section className="admin-card" style={{ display: "grid", gap: 8 }}>
-        <strong>Создатель</strong>
-        <select value={creatorUserId ?? ""} onChange={(e) => setCreatorUserId(e.target.value ? Number(e.target.value) : null)} disabled={isBusy}>
-          <option value="">Не выбран</option>
-          {users.map((user) => (
-            <option key={user.id} value={user.id}>{user.username}</option>
-          ))}
-        </select>
-        <button type="button" className="ghost-button" disabled={isBusy} onClick={() => token && runAction(() => updateCounterpartySettings(token, { task_creator_user_id: creatorUserId }), "Настройки сохранены")}>Сохранить</button>
-      </section>
 
       <button type="button" className="secondary-button" disabled={isBusy} onClick={openCreateModal}>Создать автозадачу</button>
 
@@ -201,20 +199,29 @@ const AutoTasksPanel = ({ counterparty }: Props) => {
 
       {isCreateModalOpen ? (
         <div className="admin-modal-backdrop">
-          <form className="admin-modal" onSubmit={(event) => void submitRule(event)}>
+          <form className="admin-modal" onSubmit={(event) => void submitRule(event)} style={{ display: "grid", gap: 10 }}>
             <h3 style={{ marginTop: 0 }}>{editingRuleId ? "Редактировать автозадачу" : "Создать автозадачу"}</h3>
-            <label>
+            <label style={{ display: "grid", gap: 6 }}>
               Тип правила
               <select value={kind} onChange={(e) => setKind(e.target.value as "MAKE_ORDER" | "SEND_ORDER")} disabled={isBusy}>
                 <option value="MAKE_ORDER">Сделать заявку</option>
                 <option value="SEND_ORDER">Отправить заявку</option>
               </select>
             </label>
-            <label>
+            <label style={{ display: "grid", gap: 6 }}>
               Название
               <input value={titleTemplate} onChange={(e) => setTitleTemplate(e.target.value)} placeholder="Название задачи" disabled={isBusy} />
             </label>
-            <label>
+            <label style={{ display: "grid", gap: 6 }}>
+              Автор задачи
+              <select value={creatorUserId ?? ""} onChange={(e) => setCreatorUserId(e.target.value ? Number(e.target.value) : null)} disabled={isBusy} required>
+                <option value="">Не выбран</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.username}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
               Исполнители
               <select multiple value={assignees.map(String)} onChange={(e) => setAssignees(Array.from(e.target.selectedOptions).map((item) => Number(item.value)))} disabled={isBusy}>
                 {users.map((user) => (
@@ -222,16 +229,18 @@ const AutoTasksPanel = ({ counterparty }: Props) => {
                 ))}
               </select>
             </label>
-            <label>
-              День
-              <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} disabled={isBusy}>
-                {Object.entries(weekdayMap).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-            <label>
-              Время
-              <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} disabled={isBusy} />
-            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                День
+                <select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} disabled={isBusy}>
+                  {Object.entries(weekdayMap).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                Время
+                <input type="time" value={dueTime} onChange={(e) => setDueTime(e.target.value)} disabled={isBusy} />
+              </label>
+            </div>
             <div className="admin-modal-actions">
               <button type="button" className="ghost-button" disabled={isBusy} onClick={() => setIsCreateModalOpen(false)}>Отмена</button>
               <button type="submit" className="secondary-button" disabled={isBusy}>Создать</button>

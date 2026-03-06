@@ -62,6 +62,8 @@ export const createCounterpartyFolder = (token: string, payload: Partial<Counter
   apiFetch<CounterpartyFolderDto>("/counterparties/folders", { method: "POST", body: JSON.stringify(payload) }, token);
 export const updateCounterpartyFolder = (token: string, id: number, payload: Partial<CounterpartyFolderDto>) =>
   apiFetch<CounterpartyFolderDto>(`/counterparties/folders/${id}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+export const deleteCounterpartyFolder = (token: string, id: number) =>
+  apiFetch<void>(`/counterparties/folders/${id}`, { method: "DELETE" }, token);
 export const getCounterparties = (token: string, includeArchived = false) =>
   apiFetch<CounterpartyDto[]>(`/counterparties?include_archived=${includeArchived}`, { method: "GET" }, token);
 export const createCounterparty = (token: string, payload: Partial<CounterpartyDto>) =>

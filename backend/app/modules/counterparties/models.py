@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-CounterpartyStatus = Literal["active", "inactive"]
+CounterpartyStatus = Literal["active", "inactive", "archived"]
 CounterpartyAutoTaskKind = Literal["MAKE_ORDER", "SEND_ORDER"]
 CounterpartyAutoTaskState = Literal["active", "paused", "stopped", "deleted"]
 
