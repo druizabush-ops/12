@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.context import UserContext
@@ -16,6 +17,12 @@ from app.modules.tasks.schemas import (
     TaskDto,
     TaskUpdatePayload,
     TaskUserDto,
+)
+from app.modules.tasks.excel_admin import (
+    build_template_workbook,
+    export_tasks_workbook,
+    import_tasks_workbook,
+    validate_admin_pin,
 )
 from app.modules.tasks.service import (
     apply_recurrence_action,
@@ -39,6 +46,43 @@ router = APIRouter(
     tags=["tasks"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _xlsx_response(content: bytes, filename_prefix: str) -> Response:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    filename = f"{filename_prefix}_{stamp}.xlsx"
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/admin/template")
+def download_tasks_template(
+    _: None = Depends(validate_admin_pin),
+) -> Response:
+    return _xlsx_response(build_template_workbook(), "tasks_template")
+
+
+@router.get("/admin/export")
+def export_tasks_excel(
+    _: None = Depends(validate_admin_pin),
+    db: Session = Depends(get_db),
+) -> Response:
+    return _xlsx_response(export_tasks_workbook(db), "tasks_export")
+
+
+@router.post("/admin/import")
+def import_tasks_excel(
+    mode: str = Form("upsert"),
+    file: UploadFile = File(...),
+    _: None = Depends(validate_admin_pin),
+    db: Session = Depends(get_db),
+) -> dict:
+    if mode != "upsert":
+        raise HTTPException(status_code=400, detail="Only mode=upsert is supported")
+    return import_tasks_workbook(db, file)
 
 
 # ───────────────── USERS ─────────────────
