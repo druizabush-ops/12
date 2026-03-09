@@ -11,10 +11,13 @@ from fastapi import Header, HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import User
 from app.modules.tasks.models import Task, TaskAssignee, TaskVerifier
+
+BATCH_SIZE = 500
 
 EXCEL_HEADERS = [
     "id",
@@ -59,22 +62,23 @@ class ImportErrorItem:
 
 
 @dataclass
-class ImportResult:
-    created: int = 0
-    updated: int = 0
-    skipped: int = 0
-    errors: list[ImportErrorItem] | None = None
+class ParsedTaskRow:
+    row_number: int
+    task_id: str
+    is_update: bool
+    task_mapping: dict[str, Any]
+    assignee_ids: list[int]
+    verifier_ids: list[int]
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "created": self.created,
-            "updated": self.updated,
-            "skipped": self.skipped,
-            "errors": [
-                {"row": item.row, "message": item.message}
-                for item in (self.errors or [])
-            ],
-        }
+
+@dataclass
+class ParsedWorkbook:
+    rows: list[ParsedTaskRow]
+    would_create: int
+    would_update: int
+    skipped: int
+    errors: list[ImportErrorItem]
+    warnings: list[ImportErrorItem]
 
 
 def validate_admin_pin(x_tasks_admin_pin: str | None = Header(default=None)) -> None:
@@ -215,7 +219,7 @@ def build_template_workbook() -> bytes:
 
     for col, header in enumerate(EXCEL_HEADERS, start=1):
         cell = ws.cell(row=1, column=col, value=header)
-        if header in {"title", "created_by_user_id", "due_date"}:
+        if header in {"title", "created_by_user_id"}:
             cell.font = Font(bold=True)
 
     example = [
@@ -251,13 +255,9 @@ def export_tasks_workbook(db: Session) -> bytes:
     ws.append(EXCEL_HEADERS)
 
     tasks = db.scalars(select(Task).order_by(Task.created_at.asc(), Task.id.asc())).all()
-    if tasks:
-        task_ids = [task.id for task in tasks]
-        assignee_rows = db.execute(select(TaskAssignee.task_id, TaskAssignee.user_id).where(TaskAssignee.task_id.in_(task_ids))).all()
-        verifier_rows = db.execute(select(TaskVerifier.task_id, TaskVerifier.user_id).where(TaskVerifier.task_id.in_(task_ids))).all()
-    else:
-        assignee_rows = []
-        verifier_rows = []
+    task_ids = [task.id for task in tasks]
+    assignee_rows = db.execute(select(TaskAssignee.task_id, TaskAssignee.user_id).where(TaskAssignee.task_id.in_(task_ids))).all() if task_ids else []
+    verifier_rows = db.execute(select(TaskVerifier.task_id, TaskVerifier.user_id).where(TaskVerifier.task_id.in_(task_ids))).all() if task_ids else []
 
     assignee_map: dict[str, list[int]] = {}
     for task_id, user_id in assignee_rows:
@@ -294,24 +294,35 @@ def export_tasks_workbook(db: Session) -> bytes:
     return stream.getvalue()
 
 
-def import_tasks_workbook(db: Session, upload: UploadFile) -> dict[str, Any]:
-    result = ImportResult(errors=[])
+def _validate_headers(sheet: Any) -> None:
+    header_values = [_as_text(sheet.cell(row=1, column=index + 1).value) for index in range(len(EXCEL_HEADERS))]
+    if header_values != EXCEL_HEADERS:
+        raise HTTPException(status_code=400, detail="Invalid template headers")
 
+
+def _parse_workbook(db: Session, upload: UploadFile) -> ParsedWorkbook:
     if not upload.filename or not upload.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
 
     content = upload.file.read()
     workbook = load_workbook(filename=BytesIO(content), data_only=True)
     sheet = workbook.active
+    _validate_headers(sheet)
 
     user_exists_cache: dict[int, bool] = {}
+    existing_cache: dict[str, bool] = {}
+
+    rows: list[ParsedTaskRow] = []
+    errors: list[ImportErrorItem] = []
+    warnings: list[ImportErrorItem] = []
+    would_create = 0
+    would_update = 0
+    skipped = 0
 
     for row_number, row in enumerate(sheet.iter_rows(min_row=2, max_col=len(EXCEL_HEADERS), values_only=True), start=2):
-        if row is None:
-            continue
-        values = list(row)
-        if all(_as_text(item) == "" for item in values):
-            result.skipped += 1
+        values = list(row) if row is not None else []
+        if not values or all(_as_text(item) == "" for item in values):
+            skipped += 1
             continue
 
         try:
@@ -355,77 +366,158 @@ def import_tasks_workbook(db: Session, upload: UploadFile) -> dict[str, Any]:
             _validate_users_exist(db, assignee_ids, "assignee_user_ids", user_exists_cache)
             _validate_users_exist(db, verifier_ids, "verifier_user_ids", user_exists_cache)
 
-            task_id = _as_text(row_data["id"])
-            existing = db.scalar(select(Task).where(Task.id == task_id).limit(1)) if task_id else None
+            task_id = _as_text(row_data["id"]) or str(uuid4())
+            is_update = False
+            if _as_text(row_data["id"]):
+                cached = existing_cache.get(task_id)
+                if cached is None:
+                    cached = db.scalar(select(Task.id).where(Task.id == task_id).limit(1)) is not None
+                    existing_cache[task_id] = cached
+                is_update = cached
+                if not is_update:
+                    warnings.append(ImportErrorItem(row=row_number, message=f"id {task_id} не найден, будет создана новая задача"))
 
-            if existing:
-                safe_status = existing.status if existing.status == "done" and status != "done" else status
-                safe_completed_at = existing.completed_at if existing.status == "done" and status != "done" else completed_at
-
-                existing.title = title
-                existing.description = _as_text(row_data["description"]) or None
-                existing.due_date = due_date
-                existing.due_time = due_time
-                existing.priority = priority
-                existing.status = safe_status
-                existing.created_by_user_id = creator_id
-                existing.completed_at = safe_completed_at
-                existing.is_recurring = is_recurring
-                existing.recurrence_type = recurrence_type if is_recurring else None
-                existing.recurrence_interval = recurrence_interval if is_recurring else None
-                existing.recurrence_days_of_week = recurrence_days if is_recurring else None
-                existing.recurrence_end_date = recurrence_end_date if is_recurring else None
-                existing.recurrence_master_task_id = None
-                existing.recurrence_state = "active"
-                existing.is_hidden = False
-
-                db.query(TaskAssignee).filter(TaskAssignee.task_id == existing.id).delete()
-                db.query(TaskVerifier).filter(TaskVerifier.task_id == existing.id).delete()
-                for user_id in assignee_ids:
-                    db.add(TaskAssignee(task_id=existing.id, user_id=user_id))
-                for user_id in verifier_ids:
-                    db.add(TaskVerifier(task_id=existing.id, user_id=user_id))
-
-                result.updated += 1
-            else:
-                new_id = task_id or str(uuid4())
-                new_task = Task(
-                    id=new_id,
-                    title=title,
-                    description=_as_text(row_data["description"]) or None,
-                    due_date=due_date,
-                    due_time=due_time,
-                    priority=priority,
-                    status=status,
-                    created_by_user_id=creator_id,
-                    created_at=datetime.now(timezone.utc),
-                    completed_at=completed_at,
-                    verified_at=None,
-                    source_type=None,
-                    source_id=None,
-                    source_module=None,
-                    source_counterparty_id=None,
-                    source_trigger_id=None,
-                    is_recurring=is_recurring,
-                    recurrence_type=recurrence_type if is_recurring else None,
-                    recurrence_interval=recurrence_interval if is_recurring else None,
-                    recurrence_days_of_week=recurrence_days if is_recurring else None,
-                    recurrence_end_date=recurrence_end_date if is_recurring else None,
-                    recurrence_master_task_id=None,
-                    recurrence_state="active",
-                    is_hidden=False,
+            rows.append(
+                ParsedTaskRow(
+                    row_number=row_number,
+                    task_id=task_id,
+                    is_update=is_update,
+                    task_mapping={
+                        "id": task_id,
+                        "title": title,
+                        "description": _as_text(row_data["description"]) or None,
+                        "due_date": due_date,
+                        "due_time": due_time,
+                        "priority": priority,
+                        "status": status,
+                        "created_by_user_id": creator_id,
+                        "completed_at": completed_at,
+                        "verified_at": None,
+                        "source_type": None,
+                        "source_id": None,
+                        "source_module": None,
+                        "source_counterparty_id": None,
+                        "source_trigger_id": None,
+                        "is_recurring": is_recurring,
+                        "recurrence_type": recurrence_type if is_recurring else None,
+                        "recurrence_interval": recurrence_interval if is_recurring else None,
+                        "recurrence_days_of_week": recurrence_days if is_recurring else None,
+                        "recurrence_end_date": recurrence_end_date if is_recurring else None,
+                        "recurrence_master_task_id": None,
+                        "recurrence_state": "active",
+                        "is_hidden": False,
+                    },
+                    assignee_ids=assignee_ids,
+                    verifier_ids=verifier_ids,
                 )
-                db.add(new_task)
-                db.flush()
-                for user_id in assignee_ids:
-                    db.add(TaskAssignee(task_id=new_task.id, user_id=user_id))
-                for user_id in verifier_ids:
-                    db.add(TaskVerifier(task_id=new_task.id, user_id=user_id))
-                result.created += 1
+            )
+            if is_update:
+                would_update += 1
+            else:
+                would_create += 1
 
         except ValueError as exc:
-            result.errors.append(ImportErrorItem(row=row_number, message=str(exc)))
-            result.skipped += 1
+            errors.append(ImportErrorItem(row=row_number, message=str(exc)))
+            skipped += 1
 
-    db.commit()
-    return result.to_dict()
+    return ParsedWorkbook(
+        rows=rows,
+        would_create=would_create,
+        would_update=would_update,
+        skipped=skipped,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def preview_import_tasks_workbook(db: Session, upload: UploadFile) -> dict[str, Any]:
+    parsed = _parse_workbook(db, upload)
+    return {
+        "would_create": parsed.would_create,
+        "would_update": parsed.would_update,
+        "would_skip": parsed.skipped,
+        "errors": [{"row": item.row, "message": item.message} for item in parsed.errors],
+        "warnings": [{"row": item.row, "message": item.message} for item in parsed.warnings],
+    }
+
+
+def _chunks(items: list[Any], size: int) -> list[list[Any]]:
+    return [items[index:index + size] for index in range(0, len(items), size)]
+
+
+def import_tasks_workbook(db: Session, upload: UploadFile) -> dict[str, Any]:
+    parsed = _parse_workbook(db, upload)
+
+    create_rows = [item for item in parsed.rows if not item.is_update]
+    update_rows = [item for item in parsed.rows if item.is_update]
+
+    errors = list(parsed.errors)
+    created = 0
+    updated = 0
+    skipped = parsed.skipped
+
+    try:
+        with db.begin():
+            for batch in _chunks(create_rows, BATCH_SIZE):
+                try:
+                    with db.begin_nested():
+                        now = datetime.now(timezone.utc)
+                        mappings = [dict(item.task_mapping, created_at=now) for item in batch]
+                        db.bulk_insert_mappings(Task, mappings)
+
+                        assignee_rows = [
+                            {"task_id": item.task_id, "user_id": user_id}
+                            for item in batch
+                            for user_id in item.assignee_ids
+                        ]
+                        verifier_rows = [
+                            {"task_id": item.task_id, "user_id": user_id}
+                            for item in batch
+                            for user_id in item.verifier_ids
+                        ]
+                        if assignee_rows:
+                            db.bulk_insert_mappings(TaskAssignee, assignee_rows)
+                        if verifier_rows:
+                            db.bulk_insert_mappings(TaskVerifier, verifier_rows)
+                    created += len(batch)
+                except SQLAlchemyError as exc:
+                    skipped += len(batch)
+                    errors.extend(ImportErrorItem(row=item.row_number, message=f"Ошибка batch insert: {exc.__class__.__name__}") for item in batch)
+
+            for batch in _chunks(update_rows, BATCH_SIZE):
+                try:
+                    with db.begin_nested():
+                        db.bulk_update_mappings(Task, [item.task_mapping for item in batch])
+                        batch_ids = [item.task_id for item in batch]
+                        db.query(TaskAssignee).filter(TaskAssignee.task_id.in_(batch_ids)).delete(synchronize_session=False)
+                        db.query(TaskVerifier).filter(TaskVerifier.task_id.in_(batch_ids)).delete(synchronize_session=False)
+
+                        assignee_rows = [
+                            {"task_id": item.task_id, "user_id": user_id}
+                            for item in batch
+                            for user_id in item.assignee_ids
+                        ]
+                        verifier_rows = [
+                            {"task_id": item.task_id, "user_id": user_id}
+                            for item in batch
+                            for user_id in item.verifier_ids
+                        ]
+                        if assignee_rows:
+                            db.bulk_insert_mappings(TaskAssignee, assignee_rows)
+                        if verifier_rows:
+                            db.bulk_insert_mappings(TaskVerifier, verifier_rows)
+                    updated += len(batch)
+                except SQLAlchemyError as exc:
+                    skipped += len(batch)
+                    errors.extend(ImportErrorItem(row=item.row_number, message=f"Ошибка batch update: {exc.__class__.__name__}") for item in batch)
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Import failed")
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "errors": [{"row": item.row, "message": item.message} for item in errors],
+    }

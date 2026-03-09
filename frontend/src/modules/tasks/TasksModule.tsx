@@ -14,9 +14,12 @@ import {
   getTasksByDate,
   getUsers,
   importTasksExcel,
+  previewTasksImportExcel,
   returnActive,
   updateTask,
   verifyTask,
+  TasksImportPreview,
+  TasksImportResult,
 } from "../../api/tasks";
 import { useAuth } from "../../contexts/AuthContext";
 import { ModuleRuntimeProps } from "../../types/module";
@@ -82,12 +85,9 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isAdminBusy, setIsAdminBusy] = useState(false);
-  const [importResult, setImportResult] = useState<{
-    created: number;
-    updated: number;
-    skipped: number;
-    errors: Array<{ row: number; message: string }>;
-  } | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<TasksImportPreview | null>(null);
+  const [importResult, setImportResult] = useState<TasksImportResult | null>(null);
 
   const monthDays = useMemo(() => {
     const firstDayOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
@@ -319,6 +319,8 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setAdminAction(action);
     setAdminPin("");
     setAdminError("");
+    setImportFile(null);
+    setImportPreview(null);
     setImportResult(null);
   };
 
@@ -326,6 +328,8 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setAdminAction(null);
     setAdminPin("");
     setAdminError("");
+    setImportFile(null);
+    setImportPreview(null);
     setImportResult(null);
     setIsAdminBusy(false);
   };
@@ -340,6 +344,16 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     a.remove();
     URL.revokeObjectURL(url);
   };
+
+  const isXlsxFile = (file: File) => file.name.toLowerCase().endsWith(".xlsx");
+
+  const selectImportFile = () => new Promise<File | null>((resolve) => {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    picker.onchange = () => resolve(picker.files?.[0] ?? null);
+    picker.click();
+  });
 
   const runAdminAction = async () => {
     if (!adminAction || !adminPin.trim()) {
@@ -362,31 +376,18 @@ const TasksModule = (_: ModuleRuntimeProps) => {
         return;
       }
 
-      const picker = document.createElement("input");
-      picker.type = "file";
-      picker.accept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      picker.onchange = () => {
-        const file = picker.files?.[0];
-        if (!file) {
-          setIsAdminBusy(false);
-          return;
-        }
-        void importTasksExcel(adminPin.trim(), file)
-          .then(async (result) => {
-            setImportResult(result);
-            await loadTasks();
-            await loadBadges();
-          })
-          .catch((error: Error) => {
-            if (error.message.includes("Invalid admin PIN")) {
-              setAdminError("Неверный PIN");
-              return;
-            }
-            setAdminError("Не удалось импортировать файл");
-          })
-          .finally(() => setIsAdminBusy(false));
-      };
-      picker.click();
+      const file = await selectImportFile();
+      if (!file) {
+        return;
+      }
+      if (!isXlsxFile(file)) {
+        setAdminError("Поддерживаются только файлы .xlsx");
+        return;
+      }
+      setImportFile(file);
+      const preview = await previewTasksImportExcel(adminPin.trim(), file);
+      setImportPreview(preview);
+      setImportResult(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("Invalid admin PIN")) {
@@ -394,6 +395,30 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       } else {
         setAdminError("Не удалось выполнить действие");
       }
+    } finally {
+      setIsAdminBusy(false);
+    }
+  };
+
+  const runImportSubmit = async () => {
+    if (!importFile || !importPreview) {
+      setAdminError("Сначала запустите проверку файла");
+      return;
+    }
+    setAdminError("");
+    setIsAdminBusy(true);
+    try {
+      const result = await importTasksExcel(adminPin.trim(), importFile);
+      setImportResult(result);
+      await Promise.all([loadTasks(), loadBadges()]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("Invalid admin PIN")) {
+        setAdminError("Неверный PIN");
+      } else {
+        setAdminError("Не удалось импортировать файл");
+      }
+    } finally {
       setIsAdminBusy(false);
     }
   };
@@ -614,6 +639,28 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                   <li>Пользователей указывайте по ID; несколько ID — через запятую.</li>
                   <li>Перед импортом: скачайте шаблон, заполните по примеру и только потом загружайте файл.</li>
                 </ul>
+                {importFile ? <p>Выбран файл: <strong>{importFile.name}</strong></p> : null}
+                {importPreview ? (
+                  <div className="tasks-import-result">
+                    <p>
+                      Проверка: будет создано {importPreview.would_create}, обновлено {importPreview.would_update}, пропущено {importPreview.would_skip}
+                    </p>
+                    {importPreview.warnings.length > 0 ? (
+                      <ul>
+                        {importPreview.warnings.map((item) => (
+                          <li key={`w-${item.row}-${item.message}`}>⚠ Строка {item.row}: {item.message}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {importPreview.errors.length > 0 ? (
+                      <ul>
+                        {importPreview.errors.map((item) => (
+                          <li key={`e-${item.row}-${item.message}`}>Строка {item.row}: {item.message}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
                 {importResult ? (
                   <div className="tasks-import-result">
                     <p>
@@ -633,9 +680,25 @@ const TasksModule = (_: ModuleRuntimeProps) => {
 
             <div className="admin-modal-actions">
               <button type="button" className="ghost-button" onClick={closeAdminModal}>Отмена</button>
-              <button type="button" className="primary-button" onClick={() => void runAdminAction()} disabled={isAdminBusy}>
-                {isAdminBusy ? "Выполняется..." : "Продолжить"}
-              </button>
+              {adminAction === "import" ? (
+                <>
+                  <button type="button" className="secondary-button" onClick={() => void runAdminAction()} disabled={isAdminBusy}>
+                    {isAdminBusy ? "Выполняется..." : "Проверить файл"}
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => void runImportSubmit()}
+                    disabled={isAdminBusy || !importPreview}
+                  >
+                    {isAdminBusy ? "Выполняется..." : "Импортировать"}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="primary-button" onClick={() => void runAdminAction()} disabled={isAdminBusy}>
+                  {isAdminBusy ? "Выполняется..." : "Продолжить"}
+                </button>
+              )}
             </div>
           </div>
         </div>

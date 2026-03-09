@@ -22,6 +22,7 @@ from app.modules.tasks.excel_admin import (
     build_template_workbook,
     export_tasks_workbook,
     import_tasks_workbook,
+    preview_import_tasks_workbook,
     validate_admin_pin,
 )
 from app.modules.tasks.service import (
@@ -72,6 +73,16 @@ def export_tasks_excel(
 ) -> Response:
     return _xlsx_response(export_tasks_workbook(db), "tasks_export")
 
+
+
+
+@router.post("/admin/import/preview")
+def preview_tasks_import_excel(
+    file: UploadFile = File(...),
+    _: None = Depends(validate_admin_pin),
+    db: Session = Depends(get_db),
+) -> dict:
+    return preview_import_tasks_workbook(db, file)
 
 @router.post("/admin/import")
 def import_tasks_excel(

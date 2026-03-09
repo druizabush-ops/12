@@ -63,6 +63,21 @@ export type UpdateTaskPayload = Partial<CreateTaskPayload> & {
   status?: "active" | "done_pending_verify" | "done";
 };
 
+export type TasksImportPreview = {
+  would_create: number;
+  would_update: number;
+  would_skip: number;
+  errors: Array<{ row: number; message: string }>;
+  warnings: Array<{ row: number; message: string }>;
+};
+
+export type TasksImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
 export const getUsers = (token: string) => apiFetch<TaskUserDto[]>("/tasks/users", { method: "GET" }, token);
 
 export const getBadges = (token: string) => apiFetch<TaskBadgeDto>("/tasks/badges", { method: "GET" }, token);
@@ -127,19 +142,13 @@ const fetchTasksAdminBlob = async (path: string, pin: string) => {
   return response.blob();
 };
 
-export const downloadTasksTemplate = (pin: string) =>
-  fetchTasksAdminBlob("/tasks/admin/template", pin);
-
-export const exportTasksExcel = (pin: string) =>
-  fetchTasksAdminBlob("/tasks/admin/export", pin);
-
-export const importTasksExcel = async (pin: string, file: File) => {
+const postTasksAdminImport = async <T>(path: string, pin: string, file: File): Promise<T> => {
   const token = getStoredToken();
   const formData = new FormData();
   formData.append("mode", "upsert");
   formData.append("file", file);
 
-  const response = await fetch(buildUrl("/tasks/admin/import"), {
+  const response = await fetch(buildUrl(path), {
     method: "POST",
     body: formData,
     headers: {
@@ -152,10 +161,17 @@ export const importTasksExcel = async (pin: string, file: File) => {
     throw new Error((await response.text()) || "Ошибка импорта");
   }
 
-  return (await response.json()) as {
-    created: number;
-    updated: number;
-    skipped: number;
-    errors: Array<{ row: number; message: string }>;
-  };
+  return (await response.json()) as T;
 };
+
+export const downloadTasksTemplate = (pin: string) =>
+  fetchTasksAdminBlob("/tasks/admin/template", pin);
+
+export const exportTasksExcel = (pin: string) =>
+  fetchTasksAdminBlob("/tasks/admin/export", pin);
+
+export const previewTasksImportExcel = (pin: string, file: File) =>
+  postTasksAdminImport<TasksImportPreview>("/tasks/admin/import/preview", pin, file);
+
+export const importTasksExcel = (pin: string, file: File) =>
+  postTasksAdminImport<TasksImportResult>("/tasks/admin/import", pin, file);
