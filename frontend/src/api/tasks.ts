@@ -103,6 +103,24 @@ export const deleteRecurringChildren = (
 export const getTaskById = (token: string, id: string) =>
   apiFetch<TaskDto>(`/tasks/${id}`, { method: "GET" }, token);
 
+export type TasksImportColumn = { key: string; label: string; required: boolean };
+export type TasksImportPreviewRow = {
+  row_number: number;
+  values: Record<string, string>;
+  errors: string[];
+  warnings: string[];
+};
+
+export type TasksImportPreviewResponse = {
+  columns: TasksImportColumn[];
+  rows: TasksImportPreviewRow[];
+  row_errors: Array<{ row: number; errors: string[] }>;
+  row_warnings: Array<{ row: number; warnings: string[] }>;
+  total_rows: number;
+  valid_rows: number;
+  invalid_rows: number;
+};
+
 const TOKEN_STORAGE_KEY = "auth_token";
 
 const getStoredToken = () => {
@@ -112,50 +130,57 @@ const getStoredToken = () => {
   return window.localStorage.getItem(TOKEN_STORAGE_KEY);
 };
 
-const fetchTasksAdminBlob = async (path: string, pin: string) => {
+const authHeaders = (pin: string) => {
   const token = getStoredToken();
-  const response = await fetch(buildUrl(path), {
-    method: "GET",
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "X-Tasks-Admin-Pin": pin,
-    },
-  });
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    "X-Tasks-Admin-Pin": pin,
+  };
+};
+
+const fetchTasksAdminBlob = async (path: string, pin: string) => {
+  const response = await fetch(buildUrl(path), { method: "GET", headers: authHeaders(pin) });
   if (!response.ok) {
     throw new Error((await response.text()) || "Ошибка загрузки файла");
   }
   return response.blob();
 };
 
-export const downloadTasksTemplate = (pin: string) =>
-  fetchTasksAdminBlob("/tasks/admin/template", pin);
+export const downloadTasksTemplate = (pin: string) => fetchTasksAdminBlob("/tasks/admin/template", pin);
 
-export const exportTasksExcel = (pin: string) =>
-  fetchTasksAdminBlob("/tasks/admin/export", pin);
+export const exportTasksExcel = (pin: string) => fetchTasksAdminBlob("/tasks/admin/export", pin);
 
-export const importTasksExcel = async (pin: string, file: File) => {
-  const token = getStoredToken();
+export const getTasksImportPreview = async (pin: string, file: File) => {
   const formData = new FormData();
-  formData.append("mode", "upsert");
   formData.append("file", file);
-
-  const response = await fetch(buildUrl("/tasks/admin/import"), {
+  const response = await fetch(buildUrl("/tasks/admin/import-preview"), {
     method: "POST",
     body: formData,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "X-Tasks-Admin-Pin": pin,
-    },
+    headers: authHeaders(pin),
   });
+  if (!response.ok) {
+    throw new Error((await response.text()) || "Ошибка предпросмотра");
+  }
+  return (await response.json()) as TasksImportPreviewResponse;
+};
 
+export const importTasksExcel = async (pin: string, payload: { rows: TasksImportPreviewRow[] }) => {
+  const response = await fetch(buildUrl("/tasks/admin/import"), {
+    method: "POST",
+    headers: {
+      ...authHeaders(pin),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
   if (!response.ok) {
     throw new Error((await response.text()) || "Ошибка импорта");
   }
-
   return (await response.json()) as {
     created: number;
     updated: number;
     skipped: number;
     errors: Array<{ row: number; message: string }>;
+    total_rows: number;
   };
 };

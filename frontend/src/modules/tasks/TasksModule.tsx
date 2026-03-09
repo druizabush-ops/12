@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   TaskDto,
@@ -11,9 +11,12 @@ import {
   exportTasksExcel,
   getBadges,
   getTaskById,
+  getTasksImportPreview,
   getTasksByDate,
   getUsers,
   importTasksExcel,
+  TasksImportPreviewResponse,
+  TasksImportPreviewRow,
   returnActive,
   updateTask,
   verifyTask,
@@ -33,6 +36,7 @@ type TaskTab = "assigned" | "verify" | "created";
 
 type CalendarCell = { date: Date; isCurrentMonth: boolean; isToday: boolean; isSelected: boolean };
 type AdminActionType = "template" | "export" | "import";
+type PinPurpose = "template" | "export" | "import";
 
 const tabLabel = (tab: TaskTab) => {
   if (tab === "verify") return "На проверку";
@@ -78,10 +82,13 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState<string[]>([]);
   const [recurrenceEndDate, setRecurrenceEndDate] = useState("");
   const [formError, setFormError] = useState("");
-  const [adminAction, setAdminAction] = useState<AdminActionType | null>(null);
+  const [pinPurpose, setPinPurpose] = useState<PinPurpose | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
   const [isAdminBusy, setIsAdminBusy] = useState(false);
+  const [preview, setPreview] = useState<TasksImportPreviewResponse | null>(null);
+  const [importFileName, setImportFileName] = useState("");
   const [importResult, setImportResult] = useState<{
     created: number;
     updated: number;
@@ -316,18 +323,26 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   };
 
   const openAdminPinModal = (action: AdminActionType) => {
-    setAdminAction(action);
+    setPinPurpose(action);
     setAdminPin("");
     setAdminError("");
-    setImportResult(null);
   };
 
-  const closeAdminModal = () => {
-    setAdminAction(null);
-    setAdminPin("");
+  const closePinModal = (clearPin = true) => {
+    setPinPurpose(null);
+    if (clearPin) {
+      setAdminPin("");
+    }
     setAdminError("");
-    setImportResult(null);
     setIsAdminBusy(false);
+  };
+
+  const closeImportModal = () => {
+    setImportOpen(false);
+    setPreview(null);
+    setImportResult(null);
+    setImportFileName("");
+    setAdminError("");
   };
 
   const downloadBlobFile = (blob: Blob, filename: string) => {
@@ -342,51 +357,28 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   };
 
   const runAdminAction = async () => {
-    if (!adminAction || !adminPin.trim()) {
+    if (!pinPurpose || !adminPin.trim()) {
       setAdminError("Введите PIN");
       return;
     }
     setAdminError("");
     setIsAdminBusy(true);
     try {
-      if (adminAction === "template") {
+      if (pinPurpose === "template") {
         const blob = await downloadTasksTemplate(adminPin.trim());
         downloadBlobFile(blob, "tasks_template.xlsx");
-        closeAdminModal();
+        closePinModal();
         return;
       }
-      if (adminAction === "export") {
+      if (pinPurpose === "export") {
         const blob = await exportTasksExcel(adminPin.trim());
         downloadBlobFile(blob, "tasks_export.xlsx");
-        closeAdminModal();
+        closePinModal();
         return;
       }
-
-      const picker = document.createElement("input");
-      picker.type = "file";
-      picker.accept = ".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      picker.onchange = () => {
-        const file = picker.files?.[0];
-        if (!file) {
-          setIsAdminBusy(false);
-          return;
-        }
-        void importTasksExcel(adminPin.trim(), file)
-          .then(async (result) => {
-            setImportResult(result);
-            await loadTasks();
-            await loadBadges();
-          })
-          .catch((error: Error) => {
-            if (error.message.includes("Invalid admin PIN")) {
-              setAdminError("Неверный PIN");
-              return;
-            }
-            setAdminError("Не удалось импортировать файл");
-          })
-          .finally(() => setIsAdminBusy(false));
-      };
-      picker.click();
+      setImportOpen(true);
+      closePinModal(false);
+      return;
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
       if (message.includes("Invalid admin PIN")) {
@@ -394,6 +386,51 @@ const TasksModule = (_: ModuleRuntimeProps) => {
       } else {
         setAdminError("Не удалось выполнить действие");
       }
+      setIsAdminBusy(false);
+    }
+  };
+
+  const onPickImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !adminPin.trim()) return;
+    setImportFileName(file.name);
+    setImportResult(null);
+    setAdminError("");
+    try {
+      const data = await getTasksImportPreview(adminPin.trim(), file);
+      setPreview(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.includes("Invalid admin PIN")) {
+        setAdminError("Неверный PIN");
+      } else {
+        setAdminError("Не удалось получить предпросмотр");
+      }
+    }
+  };
+
+  const onPreviewCellChange = (rowNumber: number, key: string, value: string) => {
+    setPreview((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) => (row.row_number === rowNumber ? { ...row, values: { ...row.values, [key]: value } } : row)),
+      };
+    });
+  };
+
+  const submitImport = async () => {
+    if (!preview) return;
+    setIsAdminBusy(true);
+    setAdminError("");
+    try {
+      const result = await importTasksExcel(adminPin.trim(), { rows: preview.rows as TasksImportPreviewRow[] });
+      setImportResult(result);
+      await Promise.all([loadTasks(), loadBadges()]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      setAdminError(message.includes("Invalid admin PIN") ? "Неверный PIN" : "Не удалось импортировать данные");
+    } finally {
       setIsAdminBusy(false);
     }
   };
@@ -583,11 +620,11 @@ const TasksModule = (_: ModuleRuntimeProps) => {
         </div>
       ) : null}
 
-      {adminAction ? (
+      {pinPurpose ? (
         <div className="admin-modal-backdrop">
-          <div className="admin-modal tasks-admin-modal">
+          <div className="admin-modal tasks-admin-pin-modal">
             <h3>
-              {adminAction === "template" ? "Скачать шаблон" : adminAction === "export" ? "Экспорт задач" : "Импорт задач"}
+              {pinPurpose === "template" ? "Скачать шаблон" : pinPurpose === "export" ? "Экспорт задач" : "Импорт задач"}
             </h3>
             <p className="muted">Введите PIN администратора для продолжения.</p>
             <input
@@ -599,42 +636,91 @@ const TasksModule = (_: ModuleRuntimeProps) => {
             />
             {adminError ? <p className="form-error">{adminError}</p> : null}
 
-            {adminAction === "import" ? (
-              <div className="tasks-import-help">
-                <h4>Как работает импорт</h4>
-                <ul>
-                  <li>Импорт помогает массово создать новые задачи, обновить текущие или перенести их из Excel.</li>
-                  <li>Если указан существующий <code>id</code> — задача обновится. Если <code>id</code> пустой — создастся новая.</li>
-                  <li><strong>created_by_user_id</strong> обязателен. Если <code>assignee_user_ids</code> пустой, исполнителем станет создатель.</li>
-                  <li>Если <code>verifier_user_ids</code> пустой — задача будет без проверки.</li>
-                  <li><code>done_pending_verify</code> импортировать нельзя.</li>
-                  <li>Если <code>status = done</code>, поле <code>completed_at</code> обязательно.</li>
-                  <li>Повторяющиеся задачи импортируются как master; дочерние задачи создаёт программа автоматически.</li>
-                  <li>Форматы: <code>due_date = YYYY-MM-DD</code>, <code>due_time = HH:MM</code>, <code>completed_at = YYYY-MM-DD HH:MM</code>.</li>
-                  <li>Пользователей указывайте по ID; несколько ID — через запятую.</li>
-                  <li>Перед импортом: скачайте шаблон, заполните по примеру и только потом загружайте файл.</li>
-                </ul>
-                {importResult ? (
-                  <div className="tasks-import-result">
-                    <p>
-                      Создано: {importResult.created}, Обновлено: {importResult.updated}, Пропущено: {importResult.skipped}
-                    </p>
-                    {importResult.errors.length > 0 ? (
-                      <ul>
-                        {importResult.errors.map((item) => (
-                          <li key={`${item.row}-${item.message}`}>Строка {item.row}: {item.message}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
             <div className="admin-modal-actions">
-              <button type="button" className="ghost-button" onClick={closeAdminModal}>Отмена</button>
+              <button type="button" className="ghost-button" onClick={() => closePinModal()}>Отмена</button>
               <button type="button" className="primary-button" onClick={() => void runAdminAction()} disabled={isAdminBusy}>
                 {isAdminBusy ? "Выполняется..." : "Продолжить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {importOpen ? (
+        <div className="admin-modal-backdrop">
+          <div className="admin-modal tasks-admin-modal">
+            <h3>Импорт задач из Excel</h3>
+            <div className="tasks-import-help">
+              <h4>Инструкция</h4>
+              <ul>
+                <li>Шаблон — это готовый Excel-файл с нужными колонками и примером заполнения.</li>
+                <li>Экспорт выгружает все задачи, чтобы посмотреть структуру и при необходимости отредактировать её.</li>
+                <li>Импорт загружает задачи в систему: новые строки создаются, строки с существующим ID обновляются.</li>
+                <li>Перед импортом лучше скачать шаблон или экспорт и сверить структуру данных.</li>
+                <li>Обязательные поля в таблице помечены звёздочкой и выделены жирным.</li>
+                <li><strong>creator_id</strong> обязателен, пользователи указываются по ID.</li>
+                <li>Если ID исполнителей пустой — исполнитель назначается как создатель.</li>
+                <li>Если ID проверяющих пустой — проверка не требуется.</li>
+                <li>Статус <code>done</code> требует заполненного поля даты/времени завершения.</li>
+                <li>Статус <code>done_pending_verify</code> импортировать нельзя.</li>
+                <li>Повторяющиеся задачи импортируются только как master, дочерние создаются автоматически.</li>
+                <li>Импорт построчный: ошибка в одной строке не блокирует остальные.</li>
+                <li>Перед подтверждением вы можете проверить и исправить данные прямо в таблице ниже.</li>
+              </ul>
+            </div>
+            <div className="tasks-import-controls">
+              <input type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(event) => void onPickImportFile(event)} />
+              {importFileName ? <p className="muted">Файл: {importFileName}</p> : null}
+            </div>
+            {preview ? (
+              <>
+                <p className="muted">Всего строк: {preview.total_rows}. Валидных: {preview.valid_rows}. С ошибками: {preview.invalid_rows}.</p>
+                <div className="tasks-preview-table-wrap">
+                  <table className="tasks-preview-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        {preview.columns.map((col) => <th key={col.key}>{col.label}</th>)}
+                        <th>Действие</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.map((row) => (
+                        <tr key={row.row_number} className={row.errors.length ? "row-invalid" : ""}>
+                          <td>{row.row_number}</td>
+                          {preview.columns.map((col) => (
+                            <td key={`${row.row_number}-${col.key}`}>
+                              <input
+                                className={col.required ? "required-cell" : ""}
+                                value={row.values[col.key] ?? ""}
+                                onChange={(event) => onPreviewCellChange(row.row_number, col.key, event.target.value)}
+                              />
+                            </td>
+                          ))}
+                          <td>{row.values._import_action === "update" ? "Обновление" : "Создание"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="tasks-import-result">
+                  {preview.row_errors.map((item) => (
+                    <p key={`e-${item.row}`} className="form-error">Строка {item.row}: {item.errors.join("; ")}</p>
+                  ))}
+                </div>
+              </>
+            ) : null}
+            {importResult ? (
+              <div className="tasks-import-result">
+                <p>Создано: {importResult.created}, Обновлено: {importResult.updated}, Пропущено: {importResult.skipped}</p>
+                {importResult.errors.map((item) => <p key={`${item.row}-${item.message}`} className="form-error">Строка {item.row}: {item.message}</p>)}
+              </div>
+            ) : null}
+            {adminError ? <p className="form-error">{adminError}</p> : null}
+            <div className="admin-modal-actions">
+              <button type="button" className="ghost-button" onClick={closeImportModal}>Закрыть</button>
+              <button type="button" className="primary-button" disabled={!preview || isAdminBusy} onClick={() => void submitImport()}>
+                {isAdminBusy ? "Импорт..." : "Подтвердить импорт"}
               </button>
             </div>
           </div>

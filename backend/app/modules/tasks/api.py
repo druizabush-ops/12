@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
@@ -19,9 +19,10 @@ from app.modules.tasks.schemas import (
     TaskUserDto,
 )
 from app.modules.tasks.excel_admin import (
+    build_import_preview,
     build_template_workbook,
     export_tasks_workbook,
-    import_tasks_workbook,
+    import_tasks_from_preview,
     validate_admin_pin,
 )
 from app.modules.tasks.service import (
@@ -73,16 +74,25 @@ def export_tasks_excel(
     return _xlsx_response(export_tasks_workbook(db), "tasks_export")
 
 
-@router.post("/admin/import")
-def import_tasks_excel(
-    mode: str = Form("upsert"),
+@router.post("/admin/import-preview")
+def import_tasks_excel_preview(
     file: UploadFile = File(...),
     _: None = Depends(validate_admin_pin),
     db: Session = Depends(get_db),
 ) -> dict:
-    if mode != "upsert":
-        raise HTTPException(status_code=400, detail="Only mode=upsert is supported")
-    return import_tasks_workbook(db, file)
+    return build_import_preview(db, file)
+
+
+@router.post("/admin/import")
+def import_tasks_excel(
+    payload: dict = Body(...),
+    _: None = Depends(validate_admin_pin),
+    db: Session = Depends(get_db),
+) -> dict:
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows must be a list")
+    return import_tasks_from_preview(db, rows)
 
 
 # ───────────────── USERS ─────────────────
