@@ -846,8 +846,13 @@ body {
 }
 
 .tasks-admin-modal {
-  max-height: 85vh;
+  width: min(1300px, 96vw);
+  max-height: 90vh;
   overflow: auto;
+}
+
+.tasks-admin-pin-modal {
+  width: min(420px, 92vw);
 }
 
 .tasks-import-help {
@@ -873,4 +878,39 @@ body {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+.tasks-import-controls {
+  margin-top: 10px;
+}
+
+.tasks-preview-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.tasks-preview-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 1100px;
+}
+
+.tasks-preview-table th,
+.tasks-preview-table td {
+  border: 1px solid var(--border);
+  padding: 6px;
+  vertical-align: top;
+}
+
+.tasks-preview-table td input {
+  width: 100%;
+}
+
+.tasks-preview-table .row-invalid {
+  background: color-mix(in srgb, #ff4d4f 10%, transparent);
+}
+
+.tasks-preview-table .required-cell {
+  font-weight: 700;
 }

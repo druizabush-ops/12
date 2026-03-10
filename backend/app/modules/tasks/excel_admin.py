@@ -16,40 +16,46 @@ from sqlalchemy.orm import Session
 from app.modules.auth.models import User
 from app.modules.tasks.models import Task, TaskAssignee, TaskVerifier
 
-EXCEL_HEADERS = [
-    "id",
-    "title",
-    "description",
-    "due_date",
-    "due_time",
-    "priority",
-    "status",
-    "created_by_user_id",
-    "assignee_user_ids",
-    "verifier_user_ids",
-    "completed_at",
-    "is_recurring",
-    "recurrence_type",
-    "recurrence_interval",
-    "recurrence_days_of_week",
-    "recurrence_end_date",
+
+@dataclass(frozen=True)
+class ExcelColumn:
+    key: str
+    label: str
+    required: bool = False
+
+
+EXCEL_COLUMNS: list[ExcelColumn] = [
+    ExcelColumn("id", "ID задачи"),
+    ExcelColumn("title", "Название *", required=True),
+    ExcelColumn("description", "Описание"),
+    ExcelColumn("creator_id", "ID создателя *", required=True),
+    ExcelColumn("assignee_ids", "ID исполнителей"),
+    ExcelColumn("verifier_ids", "ID проверяющих"),
+    ExcelColumn("status", "Статус"),
+    ExcelColumn("priority", "Приоритет"),
+    ExcelColumn("due_date", "Дата выполнения"),
+    ExcelColumn("due_time", "Время выполнения"),
+    ExcelColumn("completed_at", "Дата и время завершения"),
+    ExcelColumn("is_recurring", "Повторяющаяся задача"),
+    ExcelColumn("recurrence_type", "Тип повторения"),
+    ExcelColumn("recurrence_interval", "Интервал повторения"),
+    ExcelColumn("recurrence_days_of_week", "Дни недели"),
+    ExcelColumn("recurrence_end_date", "Дата окончания повторения"),
+    ExcelColumn("recurrence_master_task_id", "ID мастер-задачи повторения"),
+    ExcelColumn("source_module", "Модуль-источник"),
+    ExcelColumn("source_entity", "Сущность-источник"),
+    ExcelColumn("source_url", "Ссылка-источник"),
+    ExcelColumn("created_at", "Создано"),
+    ExcelColumn("updated_at", "Обновлено"),
 ]
 
-PRIORITY_RU_TO_EN = {
-    "обычная": "normal",
-    "срочно": "urgent",
-    "очень срочно": "very_urgent",
+LABEL_TO_KEY = {col.label: col.key for col in EXCEL_COLUMNS}
+HEADER_ALIASES = {
+    "created_by_user_id": "creator_id",
+    "assignee_user_ids": "assignee_ids",
+    "verifier_user_ids": "verifier_ids",
 }
-
-WEEKDAY_RU_TO_NUM = {
-    "пн": "1",
-    "вт": "2",
-    "ср": "3",
-    "чт": "4",
-    "пт": "5",
-    "сб": "6",
-    "вс": "7",
-}
+REQUIRED_KEYS = {c.key for c in EXCEL_COLUMNS if c.required}
 
 
 @dataclass
@@ -65,15 +71,13 @@ class ImportResult:
     skipped: int = 0
     errors: list[ImportErrorItem] | None = None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, total_rows: int = 0) -> dict[str, Any]:
         return {
             "created": self.created,
             "updated": self.updated,
             "skipped": self.skipped,
-            "errors": [
-                {"row": item.row, "message": item.message}
-                for item in (self.errors or [])
-            ],
+            "errors": [{"row": item.row, "message": item.message} for item in (self.errors or [])],
+            "total_rows": total_rows,
         }
 
 
@@ -84,9 +88,7 @@ def validate_admin_pin(x_tasks_admin_pin: str | None = Header(default=None)) -> 
 
 
 def _as_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
+    return "" if value is None else str(value).strip()
 
 
 def _parse_date_value(value: Any, field: str) -> date | None:
@@ -114,44 +116,20 @@ def _parse_datetime_value(value: Any, field: str) -> datetime | None:
     if not text:
         return None
     try:
-        parsed = datetime.strptime(text, "%Y-%m-%d %H:%M")
-        return parsed.replace(tzinfo=timezone.utc)
+        return datetime.strptime(text, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
     except ValueError as exc:
         raise ValueError(f"{field}: ожидается формат YYYY-MM-DD HH:MM") from exc
 
 
-def _parse_priority(value: Any) -> str:
-    text = _as_text(value)
-    if not text:
-        return "normal"
-    normalized = text.lower()
-    mapped = PRIORITY_RU_TO_EN.get(normalized, normalized)
-    if mapped not in {"normal", "urgent", "very_urgent"}:
-        raise ValueError("priority: допустимы normal/urgent/very_urgent")
-    return mapped
-
-
-def _parse_status(value: Any) -> str:
-    text = _as_text(value)
-    if not text:
-        return "active"
-    normalized = text.lower()
-    if normalized == "done_pending_verify":
-        raise ValueError("status: done_pending_verify импортировать нельзя")
-    if normalized not in {"active", "done"}:
-        raise ValueError("status: допустимы active/done")
-    return normalized
-
-
 def _parse_bool(value: Any, default: bool = False) -> bool:
-    text = _as_text(value)
+    text = _as_text(value).lower()
     if not text:
         return default
-    if text.lower() in {"true", "1", "yes", "да"}:
+    if text in {"true", "1", "yes", "да"}:
         return True
-    if text.lower() in {"false", "0", "no", "нет"}:
+    if text in {"false", "0", "no", "нет"}:
         return False
-    raise ValueError("is_recurring: допустимы TRUE/FALSE")
+    raise ValueError("Повторяющаяся задача: допустимы TRUE/FALSE")
 
 
 def _parse_int(value: Any, field: str, default: int | None = None) -> int | None:
@@ -159,10 +137,9 @@ def _parse_int(value: Any, field: str, default: int | None = None) -> int | None
     if not text:
         return default
     try:
-        number = int(text)
+        return int(text)
     except ValueError as exc:
         raise ValueError(f"{field}: ожидается число") from exc
-    return number
 
 
 def _parse_user_ids(value: Any, field: str) -> list[int]:
@@ -181,23 +158,6 @@ def _parse_user_ids(value: Any, field: str) -> list[int]:
     return sorted(set(result))
 
 
-def _parse_weekdays(value: Any) -> str | None:
-    text = _as_text(value)
-    if not text:
-        return None
-    values = [item.strip().lower() for item in text.split(",") if item.strip()]
-    normalized: list[str] = []
-    for item in values:
-        if item in WEEKDAY_RU_TO_NUM:
-            normalized.append(WEEKDAY_RU_TO_NUM[item])
-            continue
-        if item in {"1", "2", "3", "4", "5", "6", "7"}:
-            normalized.append(item)
-            continue
-        raise ValueError("recurrence_days_of_week: допустимы 1..7 или Пн..Вс")
-    return ",".join(sorted(set(normalized), key=int))
-
-
 def _validate_users_exist(db: Session, user_ids: list[int], field: str, cache: dict[int, bool]) -> None:
     for user_id in user_ids:
         exists = cache.get(user_id)
@@ -208,36 +168,88 @@ def _validate_users_exist(db: Session, user_ids: list[int], field: str, cache: d
             raise ValueError(f"{field}: пользователь {user_id} не найден")
 
 
+def _parse_status(value: Any) -> str:
+    status = _as_text(value).lower() or "active"
+    if status == "done_pending_verify":
+        raise ValueError("Статус done_pending_verify импортировать нельзя")
+    if status not in {"active", "done"}:
+        raise ValueError("Статус: допустимы active/done")
+    return status
+
+
+def _parse_priority(value: Any) -> str:
+    priority = _as_text(value).lower() or "normal"
+    if priority not in {"normal", "urgent", "very_urgent"}:
+        raise ValueError("Приоритет: допустимы normal/urgent/very_urgent")
+    return priority
+
+
+def _normalize_headers(raw_headers: list[Any]) -> list[str]:
+    headers: list[str] = []
+    for value in raw_headers:
+        text = _as_text(value)
+        key = LABEL_TO_KEY.get(text, text)
+        key = HEADER_ALIASES.get(key, key)
+        headers.append(key)
+    return headers
+
+
+def _rows_from_sheet(sheet) -> tuple[list[str], list[dict[str, Any]]]:
+    raw_headers = [cell.value for cell in sheet[1]]
+    headers = _normalize_headers(raw_headers)
+    rows: list[dict[str, Any]] = []
+    for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        row_map = {headers[idx]: row[idx] if idx < len(row) else None for idx in range(len(headers)) if headers[idx]}
+        row_map["_row_number"] = row_number
+        rows.append(row_map)
+    return headers, rows
+
+
 def build_template_workbook() -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.title = "tasks_template"
+    ws.title = "Шаблон"
+    ws.append([c.label for c in EXCEL_COLUMNS])
+    for col_idx, col in enumerate(EXCEL_COLUMNS, start=1):
+        if col.required:
+            ws.cell(row=1, column=col_idx).font = Font(bold=True)
 
-    for col, header in enumerate(EXCEL_HEADERS, start=1):
-        cell = ws.cell(row=1, column=col, value=header)
-        if header in {"title", "created_by_user_id", "due_date"}:
-            cell.font = Font(bold=True)
-
-    example = [
+    ws.append([
         "",
         "Проверить документы",
-        "Пример задачи из шаблона",
-        "2026-03-10",
-        "10:30",
-        "normal",
-        "active",
+        "Пример заполненной задачи",
         "1",
         "1,2",
         "",
+        "active",
+        "normal",
+        "2026-03-10",
+        "10:30",
         "",
         "FALSE",
-        "weekly",
+        "",
         "1",
-        "1,3,5",
-        "2026-12-31",
+        "",
+        "",
+        "",
+        "counterparties",
+        "contract",
+        "https://example.local/task/1",
+        "",
+        "",
+    ])
+
+    note = wb.create_sheet("Инструкция")
+    note.append(["Как пользоваться шаблоном"])
+    notes = [
+        "1) Заполните строки ниже заголовка. Обязательные поля выделены жирным и отмечены *.",
+        "2) ID исполнителей/проверяющих и дни недели указывайте через запятую.",
+        "3) Статус допускается только active или done. done_pending_verify импортировать нельзя.",
+        "4) Для status=done поле 'Дата и время завершения' обязательно.",
+        "5) Если ID задачи указан и найден — задача обновится. Если пустой — создастся новая.",
     ]
-    for col, value in enumerate(example, start=1):
-        ws.cell(row=2, column=col, value=value)
+    for item in notes:
+        note.append([item])
 
     stream = BytesIO()
     wb.save(stream)
@@ -247,185 +259,211 @@ def build_template_workbook() -> bytes:
 def export_tasks_workbook(db: Session) -> bytes:
     wb = Workbook()
     ws = wb.active
-    ws.title = "tasks_export"
-    ws.append(EXCEL_HEADERS)
+    ws.title = "Экспорт задач"
+    ws.append([c.label for c in EXCEL_COLUMNS])
 
     tasks = db.scalars(select(Task).order_by(Task.created_at.asc(), Task.id.asc())).all()
-    if tasks:
-        task_ids = [task.id for task in tasks]
-        assignee_rows = db.execute(select(TaskAssignee.task_id, TaskAssignee.user_id).where(TaskAssignee.task_id.in_(task_ids))).all()
-        verifier_rows = db.execute(select(TaskVerifier.task_id, TaskVerifier.user_id).where(TaskVerifier.task_id.in_(task_ids))).all()
-    else:
-        assignee_rows = []
-        verifier_rows = []
-
+    task_ids = [t.id for t in tasks]
+    assignee_rows = db.execute(select(TaskAssignee.task_id, TaskAssignee.user_id).where(TaskAssignee.task_id.in_(task_ids))).all() if task_ids else []
+    verifier_rows = db.execute(select(TaskVerifier.task_id, TaskVerifier.user_id).where(TaskVerifier.task_id.in_(task_ids))).all() if task_ids else []
     assignee_map: dict[str, list[int]] = {}
+    verifier_map: dict[str, list[int]] = {}
     for task_id, user_id in assignee_rows:
         assignee_map.setdefault(task_id, []).append(user_id)
-
-    verifier_map: dict[str, list[int]] = {}
     for task_id, user_id in verifier_rows:
         verifier_map.setdefault(task_id, []).append(user_id)
 
     for task in tasks:
-        ws.append(
-            [
-                task.id,
-                task.title,
-                task.description,
-                task.due_date.isoformat() if task.due_date else "",
-                task.due_time.strftime("%H:%M") if task.due_time else "",
-                task.priority or "",
-                task.status,
-                task.created_by_user_id,
-                ",".join(str(item) for item in sorted(set(assignee_map.get(task.id, [])))),
-                ",".join(str(item) for item in sorted(set(verifier_map.get(task.id, [])))),
-                task.completed_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M") if task.completed_at else "",
-                "TRUE" if task.is_recurring else "FALSE",
-                task.recurrence_type or "",
-                task.recurrence_interval or "",
-                task.recurrence_days_of_week or "",
-                task.recurrence_end_date.isoformat() if task.recurrence_end_date else "",
-            ]
-        )
+        ws.append([
+            task.id,
+            task.title,
+            task.description or "",
+            task.created_by_user_id,
+            ",".join(str(v) for v in sorted(set(assignee_map.get(task.id, [])))),
+            ",".join(str(v) for v in sorted(set(verifier_map.get(task.id, [])))),
+            task.status,
+            task.priority or "",
+            task.due_date.isoformat() if task.due_date else "",
+            task.due_time.strftime("%H:%M") if task.due_time else "",
+            task.completed_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M") if task.completed_at else "",
+            "TRUE" if task.is_recurring else "FALSE",
+            task.recurrence_type or "",
+            task.recurrence_interval or "",
+            task.recurrence_days_of_week or "",
+            task.recurrence_end_date.isoformat() if task.recurrence_end_date else "",
+            task.recurrence_master_task_id or "",
+            task.source_module or "",
+            task.source_type or "",
+            task.source_id or "",
+            task.created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "",
+        ])
 
     stream = BytesIO()
     wb.save(stream)
     return stream.getvalue()
 
 
-def import_tasks_workbook(db: Session, upload: UploadFile) -> dict[str, Any]:
-    result = ImportResult(errors=[])
+def _validate_row(db: Session, row: dict[str, Any], user_cache: dict[int, bool]) -> tuple[dict[str, Any], list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    normalized: dict[str, Any] = {k: _as_text(v) for k, v in row.items() if not k.startswith("_")}
+    try:
+        title = _as_text(row.get("title"))
+        if not title:
+            raise ValueError("Название: обязательное поле")
+        creator_id = _parse_int(row.get("creator_id"), "ID создателя")
+        if creator_id is None:
+            raise ValueError("ID создателя: обязательное поле")
+        _validate_users_exist(db, [creator_id], "ID создателя", user_cache)
 
+        assignee_ids = _parse_user_ids(row.get("assignee_ids"), "ID исполнителей") or [creator_id]
+        verifier_ids = _parse_user_ids(row.get("verifier_ids"), "ID проверяющих")
+        _validate_users_exist(db, assignee_ids, "ID исполнителей", user_cache)
+        _validate_users_exist(db, verifier_ids, "ID проверяющих", user_cache)
+
+        status = _parse_status(row.get("status"))
+        completed_at = _parse_datetime_value(row.get("completed_at"), "Дата и время завершения")
+        if status == "done" and completed_at is None:
+            raise ValueError("Для статуса done заполните 'Дата и время завершения'")
+
+        priority = _parse_priority(row.get("priority"))
+        due_date = _parse_date_value(row.get("due_date"), "Дата выполнения")
+        due_time = _parse_time_value(row.get("due_time"), "Время выполнения")
+        is_recurring = _parse_bool(row.get("is_recurring"), False)
+        recurrence_interval = _parse_int(row.get("recurrence_interval"), "Интервал повторения", 1)
+        if recurrence_interval is not None and recurrence_interval < 1:
+            raise ValueError("Интервал повторения должен быть >= 1")
+        recurrence_end_date = _parse_date_value(row.get("recurrence_end_date"), "Дата окончания повторения")
+
+        task_id = _as_text(row.get("id"))
+        existing = bool(task_id and db.scalar(select(Task.id).where(Task.id == task_id).limit(1)))
+
+        normalized.update(
+            {
+                "id": task_id,
+                "title": title,
+                "creator_id": creator_id,
+                "assignee_ids": ",".join(str(i) for i in assignee_ids),
+                "verifier_ids": ",".join(str(i) for i in verifier_ids),
+                "status": status,
+                "priority": priority,
+                "due_date": due_date.isoformat() if due_date else "",
+                "due_time": due_time.strftime("%H:%M") if due_time else "",
+                "completed_at": completed_at.strftime("%Y-%m-%d %H:%M") if completed_at else "",
+                "is_recurring": "TRUE" if is_recurring else "FALSE",
+                "recurrence_interval": str(recurrence_interval or 1),
+                "recurrence_end_date": recurrence_end_date.isoformat() if recurrence_end_date else "",
+                "_import_action": "update" if existing else "create",
+            }
+        )
+    except ValueError as exc:
+        errors.append(str(exc))
+    return normalized, errors, warnings
+
+
+def build_import_preview(db: Session, upload: UploadFile) -> dict[str, Any]:
     if not upload.filename or not upload.filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported")
-
-    content = upload.file.read()
-    workbook = load_workbook(filename=BytesIO(content), data_only=True)
-    sheet = workbook.active
-
-    user_exists_cache: dict[int, bool] = {}
-
-    for row_number, row in enumerate(sheet.iter_rows(min_row=2, max_col=len(EXCEL_HEADERS), values_only=True), start=2):
-        if row is None:
+    sheet = load_workbook(filename=BytesIO(upload.file.read()), data_only=True).active
+    _, rows = _rows_from_sheet(sheet)
+    user_cache: dict[int, bool] = {}
+    preview_rows = []
+    invalid_rows = 0
+    for row in rows:
+        normalized, errors, warnings = _validate_row(db, row, user_cache)
+        if all(_as_text(v) == "" for k, v in normalized.items() if not k.startswith("_")):
             continue
-        values = list(row)
-        if all(_as_text(item) == "" for item in values):
-            result.skipped += 1
-            continue
+        if errors:
+            invalid_rows += 1
+        preview_rows.append(
+            {
+                "row_number": row["_row_number"],
+                "values": normalized,
+                "errors": errors,
+                "warnings": warnings,
+            }
+        )
+    total = len(preview_rows)
+    return {
+        "columns": [{"key": c.key, "label": c.label, "required": c.required} for c in EXCEL_COLUMNS],
+        "rows": preview_rows,
+        "row_errors": [{"row": r["row_number"], "errors": r["errors"]} for r in preview_rows if r["errors"]],
+        "row_warnings": [{"row": r["row_number"], "warnings": r["warnings"]} for r in preview_rows if r["warnings"]],
+        "total_rows": total,
+        "valid_rows": total - invalid_rows,
+        "invalid_rows": invalid_rows,
+    }
 
+
+def import_tasks_from_preview(db: Session, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    result = ImportResult(errors=[])
+    total_rows = len(rows)
+    user_cache: dict[int, bool] = {}
+    for index, item in enumerate(rows, start=1):
+        row = item.get("values", item)
         try:
-            row_data = {EXCEL_HEADERS[index]: values[index] for index in range(len(EXCEL_HEADERS))}
-            title = _as_text(row_data["title"])
-            if not title:
-                raise ValueError("title: обязательное поле")
-
-            creator_id = _parse_int(row_data["created_by_user_id"], "created_by_user_id")
-            if creator_id is None:
-                raise ValueError("created_by_user_id: обязательное поле")
-            _validate_users_exist(db, [creator_id], "created_by_user_id", user_exists_cache)
-
-            due_date = _parse_date_value(row_data["due_date"], "due_date")
-            due_time = _parse_time_value(row_data["due_time"], "due_time")
-            priority = _parse_priority(row_data["priority"])
-            status = _parse_status(row_data["status"])
-            completed_at = _parse_datetime_value(row_data["completed_at"], "completed_at")
-            if status == "done" and completed_at is None:
-                raise ValueError("completed_at обязателен при status=done")
-            if status != "done":
-                completed_at = None
-
-            is_recurring = _parse_bool(row_data["is_recurring"], default=False)
-            recurrence_type = _as_text(row_data["recurrence_type"]) or None
-            if recurrence_type and recurrence_type not in {"daily", "weekly", "monthly", "yearly"}:
-                raise ValueError("recurrence_type: допустимы daily/weekly/monthly/yearly")
-
-            recurrence_interval = _parse_int(row_data["recurrence_interval"], "recurrence_interval", default=1)
-            if recurrence_interval is not None and recurrence_interval < 1:
-                raise ValueError("recurrence_interval: значение должно быть >= 1")
-
-            recurrence_days = _parse_weekdays(row_data["recurrence_days_of_week"])
-            recurrence_end_date = _parse_date_value(row_data["recurrence_end_date"], "recurrence_end_date")
-
-            assignee_ids = _parse_user_ids(row_data["assignee_user_ids"], "assignee_user_ids")
-            verifier_ids = _parse_user_ids(row_data["verifier_user_ids"], "verifier_user_ids")
-            if not assignee_ids:
-                assignee_ids = [creator_id]
-
-            _validate_users_exist(db, assignee_ids, "assignee_user_ids", user_exists_cache)
-            _validate_users_exist(db, verifier_ids, "verifier_user_ids", user_exists_cache)
-
-            task_id = _as_text(row_data["id"])
+            normalized, errors, _ = _validate_row(db, row, user_cache)
+            if errors:
+                raise ValueError("; ".join(errors))
+            creator_id = int(normalized["creator_id"])
+            assignee_ids = _parse_user_ids(normalized.get("assignee_ids"), "ID исполнителей") or [creator_id]
+            verifier_ids = _parse_user_ids(normalized.get("verifier_ids"), "ID проверяющих")
+            status = normalized["status"]
+            task_id = normalized.get("id")
             existing = db.scalar(select(Task).where(Task.id == task_id).limit(1)) if task_id else None
 
+            payload = {
+                "title": normalized["title"],
+                "description": _as_text(normalized.get("description")) or None,
+                "due_date": _parse_date_value(normalized.get("due_date"), "Дата выполнения"),
+                "due_time": _parse_time_value(normalized.get("due_time"), "Время выполнения"),
+                "priority": normalized["priority"],
+                "status": status,
+                "created_by_user_id": creator_id,
+                "completed_at": _parse_datetime_value(normalized.get("completed_at"), "Дата и время завершения") if status == "done" else None,
+                "is_recurring": _parse_bool(normalized.get("is_recurring"), False),
+                "recurrence_type": _as_text(normalized.get("recurrence_type")) or None,
+                "recurrence_interval": _parse_int(normalized.get("recurrence_interval"), "Интервал повторения", 1),
+                "recurrence_days_of_week": _as_text(normalized.get("recurrence_days_of_week")) or None,
+                "recurrence_end_date": _parse_date_value(normalized.get("recurrence_end_date"), "Дата окончания повторения"),
+                "recurrence_master_task_id": _as_text(normalized.get("recurrence_master_task_id")) or None,
+                "source_module": _as_text(normalized.get("source_module")) or None,
+                "source_type": _as_text(normalized.get("source_entity")) or None,
+                "source_id": _as_text(normalized.get("source_url")) or None,
+            }
+
             if existing:
-                safe_status = existing.status if existing.status == "done" and status != "done" else status
-                safe_completed_at = existing.completed_at if existing.status == "done" and status != "done" else completed_at
-
-                existing.title = title
-                existing.description = _as_text(row_data["description"]) or None
-                existing.due_date = due_date
-                existing.due_time = due_time
-                existing.priority = priority
-                existing.status = safe_status
-                existing.created_by_user_id = creator_id
-                existing.completed_at = safe_completed_at
-                existing.is_recurring = is_recurring
-                existing.recurrence_type = recurrence_type if is_recurring else None
-                existing.recurrence_interval = recurrence_interval if is_recurring else None
-                existing.recurrence_days_of_week = recurrence_days if is_recurring else None
-                existing.recurrence_end_date = recurrence_end_date if is_recurring else None
-                existing.recurrence_master_task_id = None
-                existing.recurrence_state = "active"
-                existing.is_hidden = False
-
+                for key, value in payload.items():
+                    setattr(existing, key, value)
                 db.query(TaskAssignee).filter(TaskAssignee.task_id == existing.id).delete()
                 db.query(TaskVerifier).filter(TaskVerifier.task_id == existing.id).delete()
-                for user_id in assignee_ids:
-                    db.add(TaskAssignee(task_id=existing.id, user_id=user_id))
-                for user_id in verifier_ids:
-                    db.add(TaskVerifier(task_id=existing.id, user_id=user_id))
-
+                for uid in assignee_ids:
+                    db.add(TaskAssignee(task_id=existing.id, user_id=uid))
+                for uid in verifier_ids:
+                    db.add(TaskVerifier(task_id=existing.id, user_id=uid))
                 result.updated += 1
             else:
-                new_id = task_id or str(uuid4())
                 new_task = Task(
-                    id=new_id,
-                    title=title,
-                    description=_as_text(row_data["description"]) or None,
-                    due_date=due_date,
-                    due_time=due_time,
-                    priority=priority,
-                    status=status,
-                    created_by_user_id=creator_id,
+                    id=task_id or str(uuid4()),
                     created_at=datetime.now(timezone.utc),
-                    completed_at=completed_at,
                     verified_at=None,
-                    source_type=None,
-                    source_id=None,
-                    source_module=None,
                     source_counterparty_id=None,
                     source_trigger_id=None,
-                    is_recurring=is_recurring,
-                    recurrence_type=recurrence_type if is_recurring else None,
-                    recurrence_interval=recurrence_interval if is_recurring else None,
-                    recurrence_days_of_week=recurrence_days if is_recurring else None,
-                    recurrence_end_date=recurrence_end_date if is_recurring else None,
-                    recurrence_master_task_id=None,
                     recurrence_state="active",
                     is_hidden=False,
+                    **payload,
                 )
                 db.add(new_task)
                 db.flush()
-                for user_id in assignee_ids:
-                    db.add(TaskAssignee(task_id=new_task.id, user_id=user_id))
-                for user_id in verifier_ids:
-                    db.add(TaskVerifier(task_id=new_task.id, user_id=user_id))
+                for uid in assignee_ids:
+                    db.add(TaskAssignee(task_id=new_task.id, user_id=uid))
+                for uid in verifier_ids:
+                    db.add(TaskVerifier(task_id=new_task.id, user_id=uid))
                 result.created += 1
-
-        except ValueError as exc:
-            result.errors.append(ImportErrorItem(row=row_number, message=str(exc)))
+        except Exception as exc:
+            result.errors.append(ImportErrorItem(row=index, message=str(exc)))
             result.skipped += 1
 
     db.commit()
-    return result.to_dict()
+    return result.to_dict(total_rows=total_rows)
