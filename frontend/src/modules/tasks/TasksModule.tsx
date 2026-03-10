@@ -88,6 +88,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
   const [adminError, setAdminError] = useState("");
   const [isAdminBusy, setIsAdminBusy] = useState(false);
   const [preview, setPreview] = useState<TasksImportPreviewResponse | null>(null);
+  const [previewUserSearch, setPreviewUserSearch] = useState<Record<string, string>>({});
   const [importFileName, setImportFileName] = useState("");
   const [importResult, setImportResult] = useState<{
     created: number;
@@ -342,6 +343,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
     setPreview(null);
     setImportResult(null);
     setImportFileName("");
+    setPreviewUserSearch({});
     setAdminError("");
   };
 
@@ -417,6 +419,101 @@ const TasksModule = (_: ModuleRuntimeProps) => {
         rows: prev.rows.map((row) => (row.row_number === rowNumber ? { ...row, values: { ...row.values, [key]: value } } : row)),
       };
     });
+  };
+
+  const getUserNameById = (id: number) => preview?.users.find((item) => item.id === id)?.username ?? `ID ${id}`;
+
+  const parseCsvIds = (value: string) => value.split(",").map((item) => Number(item.trim())).filter((item) => Number.isFinite(item) && item > 0);
+
+  const togglePreviewUserId = (rowNumber: number, key: string, userId: number) => {
+    const row = preview?.rows.find((item) => item.row_number === rowNumber);
+    if (!row) return;
+    const current = parseCsvIds(String(row.values[key] ?? ""));
+    const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
+    onPreviewCellChange(rowNumber, key, next.join(","));
+  };
+
+  const renderPreviewCell = (row: TasksImportPreviewRow, key: string) => {
+    const value = String(row.values[key] ?? "");
+    if (!preview) return null;
+
+    if (key === "creator_id") {
+      const searchKey = `${row.row_number}:${key}`;
+      const search = (previewUserSearch[searchKey] ?? "").toLowerCase();
+      const filtered = preview.users.filter((item) => item.username.toLowerCase().includes(search));
+      return (
+        <div className="preview-user-picker">
+          <input
+            type="search"
+            placeholder="Поиск сотрудника"
+            value={previewUserSearch[searchKey] ?? ""}
+            onChange={(event) => setPreviewUserSearch((prev) => ({ ...prev, [searchKey]: event.target.value }))}
+          />
+          <select value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)}>
+            <option value="">Выберите создателя</option>
+            {filtered.map((item) => <option key={item.id} value={String(item.id)}>{item.username}</option>)}
+          </select>
+        </div>
+      );
+    }
+
+    if (key === "assignee_ids" || key === "verifier_ids") {
+      const selected = parseCsvIds(value);
+      const searchKey = `${row.row_number}:${key}`;
+      const search = (previewUserSearch[searchKey] ?? "").toLowerCase();
+      const filtered = preview.users.filter((item) => item.username.toLowerCase().includes(search));
+      return (
+        <details className="preview-user-multi">
+          <summary>{selected.length ? selected.map((id) => getUserNameById(id)).join(", ") : "Выбрать сотрудников"}</summary>
+          <input
+            type="search"
+            placeholder="Поиск сотрудника"
+            value={previewUserSearch[searchKey] ?? ""}
+            onChange={(event) => setPreviewUserSearch((prev) => ({ ...prev, [searchKey]: event.target.value }))}
+          />
+          <div className="preview-user-options">
+            {filtered.map((item) => (
+              <label key={item.id}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  onChange={() => togglePreviewUserId(row.row_number, key, item.id)}
+                />
+                {item.username}
+              </label>
+            ))}
+          </div>
+        </details>
+      );
+    }
+
+    if (key === "status") {
+      return (
+        <select value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)}>
+          <option value="active">active</option>
+          <option value="done">done</option>
+        </select>
+      );
+    }
+
+    if (key === "priority") {
+      return (
+        <select value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)}>
+          <option value="low">low</option>
+          <option value="normal">normal</option>
+          <option value="high">high</option>
+        </select>
+      );
+    }
+
+    if (key === "due_date") return <input type="date" value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)} />;
+    if (key === "due_time") return <input type="time" value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)} />;
+    if (key === "completed_at") return <input type="datetime-local" value={value.replace(" ", "T")} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value.replace("T", " "))} />;
+
+    const numberFields = new Set(["creator_id", "recurrence_interval"]);
+    if (numberFields.has(key)) return <input type="number" value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)} />;
+
+    return <input value={value} onChange={(event) => onPreviewCellChange(row.row_number, key, event.target.value)} />;
   };
 
   const submitImport = async () => {
@@ -658,14 +755,14 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                 <li>Импорт загружает задачи в систему: новые строки создаются, строки с существующим ID обновляются.</li>
                 <li>Перед импортом лучше скачать шаблон или экспорт и сверить структуру данных.</li>
                 <li>Обязательные поля в таблице помечены звёздочкой и выделены жирным.</li>
-                <li><strong>creator_id</strong> обязателен, пользователи указываются по ID.</li>
+                <li><strong>creator_id</strong> и <strong>дата выполнения</strong> обязательны, пользователей можно выбирать по имени.</li>
                 <li>Если ID исполнителей пустой — исполнитель назначается как создатель.</li>
                 <li>Если ID проверяющих пустой — проверка не требуется.</li>
                 <li>Статус <code>done</code> требует заполненного поля даты/времени завершения.</li>
                 <li>Статус <code>done_pending_verify</code> импортировать нельзя.</li>
                 <li>Повторяющиеся задачи импортируются только как master, дочерние создаются автоматически.</li>
                 <li>Импорт построчный: ошибка в одной строке не блокирует остальные.</li>
-                <li>Перед подтверждением вы можете проверить и исправить данные прямо в таблице ниже.</li>
+                <li>Перед подтверждением вы можете проверить и исправить данные прямо в таблице ниже (дата/время/статусы/приоритеты через соответствующие контролы).</li>
               </ul>
             </div>
             <div className="tasks-import-controls">
@@ -674,7 +771,7 @@ const TasksModule = (_: ModuleRuntimeProps) => {
             </div>
             {preview ? (
               <>
-                <p className="muted">Всего строк: {preview.total_rows}. Валидных: {preview.valid_rows}. С ошибками: {preview.invalid_rows}.</p>
+                <p className="muted">Всего строк: {preview.total_rows}. Создано: {preview.create_rows}. Обновлено: {preview.update_rows}. Ошибок: {preview.invalid_rows}.</p>
                 <div className="tasks-preview-table-wrap">
                   <table className="tasks-preview-table">
                     <thead>
@@ -689,15 +786,11 @@ const TasksModule = (_: ModuleRuntimeProps) => {
                         <tr key={row.row_number} className={row.errors.length ? "row-invalid" : ""}>
                           <td>{row.row_number}</td>
                           {preview.columns.map((col) => (
-                            <td key={`${row.row_number}-${col.key}`}>
-                              <input
-                                className={col.required ? "required-cell" : ""}
-                                value={row.values[col.key] ?? ""}
-                                onChange={(event) => onPreviewCellChange(row.row_number, col.key, event.target.value)}
-                              />
+                            <td key={`${row.row_number}-${col.key}`} className={col.required ? "required-cell" : ""}>
+                              {renderPreviewCell(row, col.key)}
                             </td>
                           ))}
-                          <td>{row.values._import_action === "update" ? "Обновление" : "Создание"}</td>
+                          <td><strong>{row.values._import_action === "update" ? "UPDATE" : "CREATE"}</strong></td>
                         </tr>
                       ))}
                     </tbody>
