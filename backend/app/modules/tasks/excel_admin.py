@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from fastapi import Header, HTTPException, UploadFile
 from openpyxl import Workbook, load_workbook
+from openpyxl.comments import Comment
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Font
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -33,7 +35,7 @@ EXCEL_COLUMNS: list[ExcelColumn] = [
     ExcelColumn("verifier_ids", "ID проверяющих"),
     ExcelColumn("status", "Статус"),
     ExcelColumn("priority", "Приоритет"),
-    ExcelColumn("due_date", "Дата выполнения"),
+    ExcelColumn("due_date", "Дата выполнения *", required=True),
     ExcelColumn("due_time", "Время выполнения"),
     ExcelColumn("completed_at", "Дата и время завершения"),
     ExcelColumn("is_recurring", "Повторяющаяся задача"),
@@ -92,6 +94,10 @@ def _as_text(value: Any) -> str:
 
 
 def _parse_date_value(value: Any, field: str) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
     text = _as_text(value)
     if not text:
         return None
@@ -102,6 +108,10 @@ def _parse_date_value(value: Any, field: str) -> date | None:
 
 
 def _parse_time_value(value: Any, field: str) -> time | None:
+    if isinstance(value, datetime):
+        return value.time().replace(second=0, microsecond=0)
+    if isinstance(value, time):
+        return value.replace(second=0, microsecond=0)
     text = _as_text(value)
     if not text:
         return None
@@ -112,6 +122,8 @@ def _parse_time_value(value: Any, field: str) -> time | None:
 
 
 def _parse_datetime_value(value: Any, field: str) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(second=0, microsecond=0, tzinfo=timezone.utc)
     text = _as_text(value)
     if not text:
         return None
@@ -179,9 +191,15 @@ def _parse_status(value: Any) -> str:
 
 def _parse_priority(value: Any) -> str:
     priority = _as_text(value).lower() or "normal"
-    if priority not in {"normal", "urgent", "very_urgent"}:
-        raise ValueError("Приоритет: допустимы normal/urgent/very_urgent")
+    if priority in {"urgent", "normal", "very_urgent"}:
+        return {"urgent": "high", "normal": "normal", "very_urgent": "high"}[priority]
+    if priority not in {"low", "normal", "high"}:
+        raise ValueError("Приоритет: допустимы low/normal/high")
     return priority
+
+
+def _priority_to_db(value: str) -> str:
+    return {"low": "normal", "normal": "normal", "high": "very_urgent"}.get(value, "normal")
 
 
 def _normalize_headers(raw_headers: list[Any]) -> list[str]:
@@ -238,6 +256,41 @@ def build_template_workbook() -> bytes:
         "",
         "",
     ])
+
+    status_validation = DataValidation(type="list", formula1='"active,done"', allow_blank=True)
+    priority_validation = DataValidation(type="list", formula1='"low,normal,high"', allow_blank=True)
+    due_date_validation = DataValidation(type="date", allow_blank=False)
+    due_time_validation = DataValidation(type="time", allow_blank=True)
+    completed_at_validation = DataValidation(type="date", allow_blank=True)
+    recurrence_interval_validation = DataValidation(type="whole", operator="greaterThanOrEqual", formula1="1", allow_blank=True)
+    creator_validation = DataValidation(type="whole", operator="greaterThan", formula1="0", allow_blank=False)
+
+    status_validation.error = "Допустимы только active или done"
+    priority_validation.error = "Допустимы только low, normal, high"
+    due_date_validation.error = "Введите дату выполнения в формате даты Excel"
+    creator_validation.error = "Введите числовой ID сотрудника"
+    recurrence_interval_validation.error = "Введите целое число >= 1"
+
+    ws.add_data_validation(status_validation)
+    ws.add_data_validation(priority_validation)
+    ws.add_data_validation(due_date_validation)
+    ws.add_data_validation(due_time_validation)
+    ws.add_data_validation(completed_at_validation)
+    ws.add_data_validation(recurrence_interval_validation)
+    ws.add_data_validation(creator_validation)
+
+    status_validation.add("G2:G1048576")
+    priority_validation.add("H2:H1048576")
+    due_date_validation.add("I2:I1048576")
+    due_time_validation.add("J2:J1048576")
+    completed_at_validation.add("K2:K1048576")
+    recurrence_interval_validation.add("N2:N1048576")
+    creator_validation.add("D2:D1048576")
+
+    ws["D1"].comment = Comment("Введите ID сотрудника из системы", "Codex")
+    ws["I1"].comment = Comment("Дата, на которую задача должна быть выполнена", "Codex")
+    ws["E1"].comment = Comment("ID исполнителей через запятую", "Codex")
+    ws["F1"].comment = Comment("ID проверяющих через запятую", "Codex")
 
     note = wb.create_sheet("Инструкция")
     note.append(["Как пользоваться шаблоном"])
@@ -329,6 +382,8 @@ def _validate_row(db: Session, row: dict[str, Any], user_cache: dict[int, bool])
 
         priority = _parse_priority(row.get("priority"))
         due_date = _parse_date_value(row.get("due_date"), "Дата выполнения")
+        if due_date is None:
+            raise ValueError("не указана дата выполнения задачи")
         due_time = _parse_time_value(row.get("due_time"), "Время выполнения")
         is_recurring = _parse_bool(row.get("is_recurring"), False)
         recurrence_interval = _parse_int(row.get("recurrence_interval"), "Интервал повторения", 1)
@@ -386,11 +441,35 @@ def build_import_preview(db: Session, upload: UploadFile) -> dict[str, Any]:
         )
     total = len(preview_rows)
     return {
-        "columns": [{"key": c.key, "label": c.label, "required": c.required} for c in EXCEL_COLUMNS],
+        "columns": [
+            {
+                "key": c.key,
+                "label": c.label,
+                "required": c.required,
+                "field_type": (
+                    "date" if c.key == "due_date" else
+                    "time" if c.key == "due_time" else
+                    "datetime" if c.key == "completed_at" else
+                    "number" if c.key in {"creator_id", "recurrence_interval"} else
+                    "select" if c.key in {"status", "priority", "creator_id", "assignee_ids", "verifier_ids"} else
+                    "text"
+                ),
+                "searchable": c.key in {"creator_id", "assignee_ids", "verifier_ids"},
+                "options": (
+                    [{"value": "active", "label": "active"}, {"value": "done", "label": "done"}] if c.key == "status" else
+                    [{"value": "low", "label": "low"}, {"value": "normal", "label": "normal"}, {"value": "high", "label": "high"}] if c.key == "priority" else
+                    []
+                ),
+            }
+            for c in EXCEL_COLUMNS
+        ],
+        "users": [{"id": user.id, "username": user.username} for user in db.scalars(select(User).order_by(User.username.asc())).all()],
         "rows": preview_rows,
         "row_errors": [{"row": r["row_number"], "errors": r["errors"]} for r in preview_rows if r["errors"]],
         "row_warnings": [{"row": r["row_number"], "warnings": r["warnings"]} for r in preview_rows if r["warnings"]],
         "total_rows": total,
+        "create_rows": sum(1 for row in preview_rows if row["values"].get("_import_action") == "create"),
+        "update_rows": sum(1 for row in preview_rows if row["values"].get("_import_action") == "update"),
         "valid_rows": total - invalid_rows,
         "invalid_rows": invalid_rows,
     }
@@ -418,7 +497,7 @@ def import_tasks_from_preview(db: Session, rows: list[dict[str, Any]]) -> dict[s
                 "description": _as_text(normalized.get("description")) or None,
                 "due_date": _parse_date_value(normalized.get("due_date"), "Дата выполнения"),
                 "due_time": _parse_time_value(normalized.get("due_time"), "Время выполнения"),
-                "priority": normalized["priority"],
+                "priority": _priority_to_db(normalized["priority"]),
                 "status": status,
                 "created_by_user_id": creator_id,
                 "completed_at": _parse_datetime_value(normalized.get("completed_at"), "Дата и время завершения") if status == "done" else None,

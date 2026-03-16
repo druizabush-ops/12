@@ -103,7 +103,14 @@ export const deleteRecurringChildren = (
 export const getTaskById = (token: string, id: string) =>
   apiFetch<TaskDto>(`/tasks/${id}`, { method: "GET" }, token);
 
-export type TasksImportColumn = { key: string; label: string; required: boolean };
+export type TasksImportColumn = {
+  key: string;
+  label: string;
+  required: boolean;
+  field_type?: "text" | "date" | "time" | "datetime" | "number" | "select";
+  options?: Array<{ value: string; label: string }>;
+  searchable?: boolean;
+};
 export type TasksImportPreviewRow = {
   row_number: number;
   values: Record<string, string>;
@@ -113,10 +120,13 @@ export type TasksImportPreviewRow = {
 
 export type TasksImportPreviewResponse = {
   columns: TasksImportColumn[];
+  users: TaskUserDto[];
   rows: TasksImportPreviewRow[];
   row_errors: Array<{ row: number; errors: string[] }>;
   row_warnings: Array<{ row: number; warnings: string[] }>;
   total_rows: number;
+  create_rows: number;
+  update_rows: number;
   valid_rows: number;
   invalid_rows: number;
 };

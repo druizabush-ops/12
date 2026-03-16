@@ -914,3 +914,20 @@ body {
 .tasks-preview-table .required-cell {
   font-weight: 700;
 }
+
+.preview-user-picker,
+.preview-user-multi {
+  display: grid;
+  gap: 6px;
+}
+
+.preview-user-options {
+  display: grid;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+}
+
+.preview-user-multi summary {
+  cursor: pointer;
+}
