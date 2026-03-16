@@ -4,11 +4,12 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.context import UserContext
 from app.core.security import get_current_user
-from app.modules.auth.schemas import Token, UserCreate, UserLogin, UserPublic
+from app.modules.auth.schemas import Token, UserCreate, UserPublic
 from app.modules.auth.security import create_access_token
 from app.modules.auth.service import authenticate_user, create_user, get_db, get_user_by_username
 
@@ -17,29 +18,19 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserPublic:
-    """Регистрация пользователя.
-    Нужна только для создания минимальной учётной записи.
-    """
-
     if get_user_by_username(db, payload.username):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already registered",
         )
     user = create_user(db, payload.username, payload.password)
-    return UserPublic(id=user.id, username=user.username)
+    return UserPublic(id=user.id, username=user.username, full_name=user.full_name)
 
 
 @router.post("/login", response_model=Token)
-def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
-    """Логин пользователя.
-    Возвращает access token для дальнейших запросов.
-    """
-
-    # OAuth2PasswordRequestForm не используется, потому что логин оформлен как обычный JSON endpoint.
-    # Принимаем Pydantic-схему, чтобы сохранить архитектуру BLOCK 11 без изменений роутера.
+def login(payload: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)) -> Token:
     user = authenticate_user(db, payload.username, payload.password)
-    if not user:
+    if not user or user.is_archived:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
@@ -52,8 +43,10 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
 def me(
     current_user: UserContext = Depends(get_current_user),
 ) -> UserPublic:
-    """Текущий пользователь.
-    Минимально читает токен и возвращает технические поля пользователя.
-    """
-
-    return UserPublic(id=current_user.id, username=current_user.username)
+    return UserPublic(
+        id=current_user.id,
+        username=current_user.username,
+        full_name=current_user.full_name,
+        is_archived=current_user.is_archived,
+        last_organization_id=current_user.last_organization_id,
+    )

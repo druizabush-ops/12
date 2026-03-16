@@ -54,7 +54,7 @@ def create_user(db: Session, username: str, password: str) -> User:
     Хранит только хэш пароля и логин.
     """
 
-    user = User(username=username, hashed_password=hash_password(password))
+    user = User(username=username, hashed_password=hash_password(password), full_name=username, is_active=True, is_archived=False)
     db.add(user)
     db.commit()
     db.refresh(user)

@@ -31,6 +31,9 @@ class UserPublic(BaseModel):
 
     id: int
     username: str
+    full_name: str | None = None
+    is_archived: bool = False
+    last_organization_id: int | None = None
 
 
 class Token(BaseModel):

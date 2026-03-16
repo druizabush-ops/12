@@ -41,4 +41,9 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    return UserContext(id=user.id, username=user.username)
+    if user.is_archived:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User archived",
+        )
+    return UserContext(id=user.id, username=user.username, full_name=user.full_name, is_archived=user.is_archived, last_organization_id=user.last_organization_id)

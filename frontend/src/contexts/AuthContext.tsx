@@ -8,6 +8,9 @@ import { apiFetch } from "../api/client";
 type User = {
   id: number;
   username: string;
+  full_name?: string | null;
+  is_archived?: boolean;
+  last_organization_id?: number | null;
 };
 
 type AuthContextValue = {

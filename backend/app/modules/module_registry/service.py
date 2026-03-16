@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.auth.models import RoleModule, RoleModulePermission, UserRole
 from app.modules.module_registry.models import PlatformModule
+from app.modules.employees.models import Permission, Position, PositionRole, RolePermission, UserOrganization, UserPosition
 
 
 def list_modules(db: Session) -> list[PlatformModule]:
@@ -40,6 +41,24 @@ def _build_permissions_map(db: Session, role_ids: list[int]) -> dict[str, dict[s
     return permissions_by_module
 
 
+def _build_employees_permissions(db: Session, user_id: int) -> dict[str, bool]:
+    organization_id = db.scalar(select(UserOrganization.organization_id).where(UserOrganization.user_id == user_id).order_by(UserOrganization.id))
+    if organization_id is None:
+        return {}
+    rows = db.execute(
+        select(Permission.code)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .join(PositionRole, PositionRole.role_id == RolePermission.role_id)
+        .join(Position, Position.id == PositionRole.position_id)
+        .join(UserPosition, UserPosition.position_id == Position.id)
+        .where(UserPosition.user_id == user_id, Position.organization_id == organization_id)
+    ).all()
+    result: dict[str, bool] = {}
+    for (code,) in rows:
+        result[code] = True
+    return result
+
+
 def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
     """Возвращает модули с флагом доступа и permissions по ролям пользователя."""
 
@@ -66,8 +85,14 @@ def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
         db.scalars(select(RoleModule.module_id).where(RoleModule.role_id.in_(role_ids))).all()
     )
 
-    return [
-        {
+    employees_permissions = _build_employees_permissions(db, user_id)
+
+    payload = []
+    for module in modules:
+        permissions = permissions_by_module.get(module.id, {})
+        if module.id == "employees":
+            permissions = employees_permissions
+        payload.append({
             "id": module.id,
             "name": module.name,
             "title": module.title,
@@ -75,10 +100,9 @@ def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
             "order": module.order,
             "is_primary": module.is_primary,
             "has_access": module.id in accessible_ids,
-            "permissions": permissions_by_module.get(module.id, {}),
-        }
-        for module in modules
-    ]
+            "permissions": permissions,
+        })
+    return payload
 
 
 def set_primary_module(db: Session, module_id: str | None) -> list[PlatformModule]:

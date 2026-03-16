@@ -409,6 +409,24 @@ Collapsed режим:
 - Перенос контрагента в root использует текущий API с folder_id=null; поведение зависит от backend-валидации в окружении.
 ---
 
+
+### [2026-03-16] — codex/employees-module-e2e
+Добавлено:
+- Новый модуль «Сотрудники» (backend + frontend) с тремя вкладками: пользователи, оргструктура, роли.
+- API для users/organizations/org/groups/org/positions/roles/permissions и endpoint переключения организации `/auth/switch-organization`.
+- Новые SQLAlchemy-модели и Alembic-миграция `0013_employees_module` для оргструктуры, ролей, permissions и связей пользователей с организациями/должностями.
+Изменено:
+- Auth User расширен полями сотрудника (ФИО, телефон, архивность, last_organization_id, timestamps) без поломки существующего user_id/token контракта.
+- `/auth/login` переведён на form-urlencoded через `OAuth2PasswordRequestForm` и frontend логин синхронизирован с этим контрактом.
+- `/modules` продолжает возвращать `has_access` и `permissions`; для модуля employees добавлена backend-агрегация effective permissions.
+Удалено:
+- Нет.
+Причина:
+- Внедрение production-ready админ-модуля сотрудников с сохранением модульной платформы, routing и backend-first RBAC.
+Риски/заметки:
+- UI модуля «Сотрудники» реализован в существующем стиле и не меняет ModuleContainer/ModuleFallback/registry-инварианты.
+- Для полного бизнес-покрытия в следующих итерациях можно расширить интерфейсы create/edit и детальные action-flow по месту использования ролей.
+
 ---
 
 ## 11) API CONTRACTS (СТРОГО ЗАКРЕПЛЕНО)
