@@ -12,12 +12,90 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.db import get_engine
 from app.modules.auth.models import Role, User, UserRole
+from app.modules.auth.models import RoleModule, RoleModulePermission
+from app.modules.module_registry.models import PlatformModule
 from app.modules.auth.security import hash_password, verify_password
 
 # Импорт Base удалён, потому что схемой управляют миграции, а лишний импорт вводит в заблуждение.
 engine = get_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 DEFAULT_ROLE_NAME = "employee"
+SUPER_ADMIN_ROLE_NAME = "SUPER_ADMIN"
+
+
+def _ensure_system_rbac_seed(db: Session) -> None:
+    """Гарантирует системный bootstrap RBAC без ручного SQL в БД."""
+
+    super_admin_role = db.scalar(select(Role).where(Role.name == SUPER_ADMIN_ROLE_NAME))
+    if super_admin_role is None:
+        super_admin_role = Role(name=SUPER_ADMIN_ROLE_NAME, can_manage_access=True)
+        db.add(super_admin_role)
+        db.flush()
+
+    module_ids = list(db.scalars(select(PlatformModule.id)))
+    for module_id in module_ids:
+        link_exists = db.scalar(
+            select(RoleModule.role_id).where(
+                RoleModule.role_id == super_admin_role.id,
+                RoleModule.module_id == module_id,
+            )
+        )
+        if link_exists is None:
+            db.add(RoleModule(role_id=super_admin_role.id, module_id=module_id))
+
+    module_permissions: dict[str, list[str]] = {
+        "admin": ["view", "create", "edit", "delete"],
+        "employees": [
+            "users.view",
+            "users.create",
+            "users.edit",
+            "users.archive",
+            "users.set_password",
+            "orgstructure.view",
+            "orgstructure.edit",
+            "roles.view",
+            "roles.create",
+            "roles.edit",
+            "roles.archive",
+            "roles.delete",
+            "organizations.switch",
+            "organizations.manage",
+            "admin.view",
+            "employees.view",
+        ],
+    }
+
+    for module_id, permissions in module_permissions.items():
+        for permission in permissions:
+            entry_exists = db.scalar(
+                select(RoleModulePermission.role_id).where(
+                    RoleModulePermission.role_id == super_admin_role.id,
+                    RoleModulePermission.module_id == module_id,
+                    RoleModulePermission.permission == permission,
+                )
+            )
+            if entry_exists is None:
+                db.add(
+                    RoleModulePermission(
+                        role_id=super_admin_role.id,
+                        module_id=module_id,
+                        permission=permission,
+                        is_allowed=True,
+                    )
+                )
+
+    admin_user = db.scalar(select(User).where(User.username == "admin"))
+    if admin_user is not None:
+        has_super_admin = db.scalar(
+            select(UserRole.user_id).where(
+                UserRole.user_id == admin_user.id,
+                UserRole.role_id == super_admin_role.id,
+            )
+        )
+        if has_super_admin is None:
+            db.add(UserRole(user_id=admin_user.id, role_id=super_admin_role.id))
+
+    db.commit()
 
 
 def init_auth_storage() -> None:
@@ -26,7 +104,12 @@ def init_auth_storage() -> None:
     """
 
     # Схема фиксируется миграциями, а runtime не должен создавать таблицы.
-    return None
+    # Разрешён только безопасный idempotent bootstrap данных RBAC.
+    db = SessionLocal()
+    try:
+        _ensure_system_rbac_seed(db)
+    finally:
+        db.close()
 
 
 def get_db() -> Generator[Session, None, None]:

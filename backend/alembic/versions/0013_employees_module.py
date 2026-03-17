@@ -163,6 +163,8 @@ def upgrade() -> None:
         ("roles", "delete", "roles.delete", "Удаление ролей"),
         ("organizations", "switch", "organizations.switch", "Переключение организации"),
         ("organizations", "manage", "organizations.manage", "Управление организациями"),
+        ("admin", "view", "admin.view", "Просмотр админ-раздела"),
+        ("employees", "view", "employees.view", "Просмотр модуля сотрудники"),
     ]
     for module, action, code, name in perms:
         bind.execute(
