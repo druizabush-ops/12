@@ -13,6 +13,7 @@ from app.modules.dummy.manifest import module as dummy_module
 from app.modules.module_registry.api import router as module_registry_router
 from app.modules.tasks import router as tasks_router
 from app.modules.user_sidebar_settings import router as user_sidebar_settings_router
+from app.modules.employees import router as employees_router
 
 modules: list[Module] = [
     Module(name="auth", router=auth_router),
@@ -21,6 +22,7 @@ modules: list[Module] = [
     Module(name="tasks", router=tasks_router),
     Module(name="counterparties", router=counterparties_router),
     Module(name="user_sidebar_settings", router=user_sidebar_settings_router),
+    Module(name="employees", router=employees_router),
     dummy_module,
 ]
 
