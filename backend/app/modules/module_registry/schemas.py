@@ -20,6 +20,7 @@ class ModuleDto(BaseModel):
     is_primary: bool
     has_access: bool
     permissions: dict[str, bool] = Field(default_factory=dict)
+    is_visible: bool = True
 
 
 class ModulePrimaryUpdate(BaseModel):
