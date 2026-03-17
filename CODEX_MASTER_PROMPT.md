@@ -312,6 +312,20 @@ Collapsed режим:
 Риски/заметки:
 - Текущая версия является функциональным baseline; требуется последующая UX-полировка форм CRUD и дополнительное e2e-тестирование на стенде с боевыми ролями.
 
+### [2026-03-17] — codex/employees-rbac-fix
+Добавлено:
+- Alembic-миграция `0014_rbac_fix` для корректного RBAC bootstrap: создание/поиск роли `SUPER_ADMIN`, автоматическая привязка к `admin`, выдача доступа ко всем модулям и обязательных permissions для `employees` и `admin`.
+- Защитный bootstrap пользователя `admin` в `auth_users` через идемпотентный `INSERT ... SELECT ... WHERE NOT EXISTS`.
+Изменено:
+- В миграции добавлена синхронизация sequence (`auth_roles`, `auth_users`) перед seed-операциями для PostgreSQL-совместимого повторного запуска.
+- Seed-логика переведена на typed bind-параметры и `bind.execute(sa.text(...), params)` без `op.execute(statement, params)`.
+Удалено:
+- Нет.
+Причина:
+- Устранить ситуацию, когда `/modules` возвращает `has_access=false` и пустые `permissions` для `admin`, несмотря на наличие модуля `employees` в реестре.
+Риски/заметки:
+- При откате удаляется роль `SUPER_ADMIN` и связанные права; существующий доступ через роль `admin` и исторические RBAC-правила остаются в рамках предыдущих миграций.
+
 ### [2026-03-10] — codex/tasks-excel-import-polish
 Добавлено:
 - UX-полировка предпросмотра Excel импорта задач: типизированные поля (date/time/datetime/number/select), searchable выбор пользователей (creator/assignee/verifier), отображение действия CREATE/UPDATE и расширенная сводка (всего/создано/обновлено/ошибок).
