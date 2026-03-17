@@ -58,6 +58,7 @@ def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
                 "is_primary": module.is_primary,
                 "has_access": False,
                 "permissions": {},
+                "is_visible": module.id != "admin",
             }
             for module in modules
         ]
@@ -76,6 +77,7 @@ def list_modules_with_access(db: Session, user_id: int) -> list[dict]:
             "is_primary": module.is_primary,
             "has_access": module.id in accessible_ids,
             "permissions": permissions_by_module.get(module.id, {}),
+            "is_visible": module.id != "admin",
         }
         for module in modules
     ]

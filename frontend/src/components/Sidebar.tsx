@@ -85,7 +85,10 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
   const [isEditingModules, setIsEditingModules] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const visibleModules = useMemo(() => modules.filter((moduleItem) => moduleItem.has_access), [modules]);
+  const visibleModules = useMemo(
+    () => modules.filter((moduleItem) => moduleItem.has_access && moduleItem.is_visible !== false),
+    [modules]
+  );
 
   const handleDragEnd = async ({ active, over }: { active: { id: string | number }; over: { id: string | number } | null }) => {
     if (!over || active.id === over.id) {
@@ -168,7 +171,7 @@ const Sidebar = ({ isCollapsed, onToggle }: SidebarProps) => {
                           isActive={location.pathname.startsWith(`/app/modules/${moduleItem.path}`)}
                           isEditingModules={isEditingModules}
                           onNavigate={(modulePath) => navigate(`/app/modules/${modulePath}`)}
-						  isCollapsed={isCollapsed}
+                          isCollapsed={isCollapsed}
                         />
                       ))}
                     </ul>
