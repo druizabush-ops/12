@@ -296,6 +296,20 @@ Collapsed режим:
 
 
 
+### [2026-03-17] — codex/employees-module-rbac-fix
+Добавлено:
+- Alembic-миграция `0014_employees_rbac_bootstrap_fix` для идемпотентного bootstrap RBAC: создание роли `SUPER_ADMIN`, создание `admin` пользователя в `auth_users`, назначение роли пользователю и выдача module access/permissions для `admin` и `employees`.
+- Защита от рассинхронизации sequence в PostgreSQL перед seed-вставками в `auth_roles` и `auth_users` через `setval(..., max(id), true)`.
+Изменено:
+- Seed-логика RBAC переведена на безопасный шаблон `INSERT ... SELECT ... WHERE NOT EXISTS` вместо конфликтно-зависимых вставок.
+- Параметризованные SQL в миграции типизированы явно (`bindparams` + `CAST`) для исключения `AmbiguousParameter` в PostgreSQL.
+Удалено:
+- Нет.
+Причина:
+- Устранить проблему `has_access=false` и пустых `permissions` для модулей `employees`/`admin` у пользователя `admin` без ручного SQL и без переноса логики доступа на frontend.
+Риски/заметки:
+- Проверка `alembic upgrade head` в текущем окружении зависит от доступности PostgreSQL и корректно настроенного `DATABASE_URL`.
+
 ### [2026-03-16] — codex/employees-module-e2e
 Добавлено:
 - Новый backend-модуль «Сотрудники»: таблицы пользователей, организаций, оргструктуры, ролей и permissions, а также API для пользователей, организаций, оргструктуры, ролей, permissions и переключения организации.
