@@ -9,9 +9,11 @@ export type PlatformModule = {
   order: number;
   is_primary: boolean;
   has_access: boolean;
+  is_visible?: boolean;
   permissions?: Record<string, boolean>;
 };
 
 export type ModuleRuntimeProps = {
+  module?: PlatformModule;
   permissions?: Record<string, boolean>;
 };

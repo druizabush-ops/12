@@ -12,6 +12,7 @@ type ModuleDto = {
   order: number;
   is_primary: boolean;
   has_access: boolean;
+  is_visible?: boolean;
   permissions?: Record<string, boolean>;
 };
 
@@ -23,6 +24,7 @@ const normalizeModule = (module: ModuleDto): PlatformModule => ({
   order: module.order,
   is_primary: module.is_primary,
   has_access: module.has_access,
+  is_visible: module.is_visible ?? true,
   permissions: module.permissions ?? {},
 });
 
